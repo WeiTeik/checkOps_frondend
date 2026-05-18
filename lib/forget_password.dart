@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'otp_email_verification.dart';
+
 class ForgetPasswordPage extends StatefulWidget {
   const ForgetPasswordPage({super.key});
 
@@ -84,7 +86,14 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const OtpEmailVerificationPage(),
+                        ),
+                      );
+                    },
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
                       backgroundColor: const Color(0xFF1796D2),
