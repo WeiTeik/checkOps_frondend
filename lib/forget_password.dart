@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'otp_email_verification.dart';
+import 'auth_api.dart';
 
 class ForgetPasswordPage extends StatefulWidget {
   const ForgetPasswordPage({super.key});
@@ -11,11 +11,45 @@ class ForgetPasswordPage extends StatefulWidget {
 
 class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
   final _emailController = TextEditingController();
+  final _authApi = AuthApi();
+  bool _isLoading = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     super.dispose();
+  }
+
+  Future<void> _requestReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showMessage('Enter your email.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final message = await _authApi.requestPasswordReset(email);
+      if (!mounted) {
+        return;
+      }
+      _showMessage('$message Open the email link to continue.');
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.message);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -86,14 +120,7 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const OtpEmailVerificationPage(),
-                        ),
-                      );
-                    },
+                    onPressed: _isLoading ? null : _requestReset,
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
                       backgroundColor: const Color(0xFF1796D2),
@@ -102,9 +129,9 @@ class _ForgetPasswordPageState extends State<ForgetPasswordPage> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: const Text(
-                      'Reset Password',
-                      style: TextStyle(
+                    child: Text(
+                      _isLoading ? 'Sending...' : 'Reset Password',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),

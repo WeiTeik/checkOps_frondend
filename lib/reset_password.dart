@@ -1,10 +1,23 @@
 import 'package:flutter/material.dart';
 
+import 'auth_api.dart';
+import 'auth_flow.dart';
+import 'expired_auth_link_page.dart';
+
 enum PasswordScreenMode { reset, set }
 
 class ResetPasswordPage extends StatefulWidget {
-  const ResetPasswordPage({super.key, this.mode = PasswordScreenMode.reset});
+  const ResetPasswordPage({
+    super.key,
+    required this.email,
+    required this.otp,
+    required this.token,
+    this.mode = PasswordScreenMode.reset,
+  });
 
+  final String email;
+  final String otp;
+  final String token;
   final PasswordScreenMode mode;
 
   @override
@@ -35,9 +48,11 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _authApi = AuthApi();
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isLoading = false;
 
   String get _title {
     return widget.mode == PasswordScreenMode.set
@@ -91,7 +106,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     super.dispose();
   }
 
-  void _submitPassword() {
+  Future<void> _submitPassword() async {
     if (!_canSubmit) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please meet all password requirements')),
@@ -99,9 +114,59 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$_title saved')));
+    setState(() => _isLoading = true);
+    try {
+      final message = widget.mode == PasswordScreenMode.set
+          ? await _authApi.setPasswordFromActivation(
+              email: widget.email,
+              otp: widget.otp,
+              token: widget.token,
+              password: _password,
+            )
+          : await _authApi.resetPassword(
+              email: widget.email,
+              otp: widget.otp,
+              token: widget.token,
+              password: _password,
+            );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (_isExpiredLinkError(error.message)) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => ExpiredAuthLinkPage(
+              email: widget.email,
+              flow: widget.mode == PasswordScreenMode.set
+                  ? OtpFlow.activation
+                  : OtpFlow.passwordReset,
+              errorMessage: error.message,
+            ),
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  bool _isExpiredLinkError(String message) {
+    return message.toLowerCase().contains('expired');
   }
 
   @override
@@ -244,7 +309,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _submitPassword,
+                    onPressed: _isLoading ? null : _submitPassword,
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
                       backgroundColor: const Color(0xFF1796D2),
@@ -254,7 +319,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       ),
                     ),
                     child: Text(
-                      _title,
+                      _isLoading ? 'Saving...' : _title,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,

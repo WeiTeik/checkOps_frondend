@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'auth_api.dart';
 import 'forget_password.dart';
 
 class LoginPage extends StatefulWidget {
@@ -11,13 +13,50 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authApi = AuthApi();
   bool _rememberMe = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage('Enter your email and password.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final response = await _authApi.login(email: email, password: password);
+      final user = response['user'] as Map<String, dynamic>?;
+      final name = user?['name']?.toString() ?? email;
+      if (!mounted) {
+        return;
+      }
+      _showMessage('Welcome, $name.');
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.message);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -133,7 +172,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 20),
                   FilledButton(
-                    onPressed: () {},
+                    onPressed: _isLoading ? null : _login,
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
                       backgroundColor: const Color(0xFF1796D2),
@@ -142,9 +181,9 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: const Text(
-                      'Sign in',
-                      style: TextStyle(
+                    child: Text(
+                      _isLoading ? 'Signing in...' : 'Sign in',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
