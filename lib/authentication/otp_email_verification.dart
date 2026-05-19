@@ -33,9 +33,11 @@ class _OtpEmailVerificationPageState extends State<OtpEmailVerificationPage> {
 
   bool get _isActivation => widget.flow == OtpFlow.activation;
 
-  String get _otp => _otpControllers.map((controller) => controller.text).join();
+  String get _otp =>
+      _otpControllers.map((controller) => controller.text).join();
 
-  String get _title => _isActivation ? 'Activate your account' : 'Verify your email';
+  String get _title =>
+      _isActivation ? 'Activate your account' : 'Verify your email';
 
   String get _subtitle {
     return _isActivation
@@ -99,16 +101,18 @@ class _OtpEmailVerificationPageState extends State<OtpEmailVerificationPage> {
           email: widget.email,
           otp: _otp,
           token: widget.token,
-          mode: _isActivation ? PasswordScreenMode.set : PasswordScreenMode.reset,
+          mode: _isActivation
+              ? PasswordScreenMode.set
+              : PasswordScreenMode.reset,
         ),
       ),
     );
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -197,7 +201,9 @@ class _OtpEmailVerificationPageState extends State<OtpEmailVerificationPage> {
                           padding: EdgeInsets.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        child: Text(_isResending ? 'Sending...' : 'Resend code'),
+                        child: Text(
+                          _isResending ? 'Sending...' : 'Resend code',
+                        ),
                       ),
                     ],
                   ),

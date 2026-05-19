@@ -58,9 +58,9 @@ class _ExpiredAuthLinkPageState extends State<ExpiredAuthLinkPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -121,10 +121,7 @@ class _ExpiredAuthLinkPageState extends State<ExpiredAuthLinkPage> {
                   Text(
                     widget.errorMessage,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 13,
-                    ),
+                    style: const TextStyle(color: Colors.white60, fontSize: 13),
                   ),
                   const SizedBox(height: 32),
                   FilledButton.icon(
@@ -142,9 +139,9 @@ class _ExpiredAuthLinkPageState extends State<ExpiredAuthLinkPage> {
                   ),
                   const SizedBox(height: 12),
                   TextButton(
-                    onPressed: () => Navigator.of(context).popUntil(
-                      (route) => route.isFirst,
-                    ),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).popUntil((route) => route.isFirst),
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF8EDCFF),
                     ),

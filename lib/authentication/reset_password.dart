@@ -132,9 +132,9 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on AuthApiException catch (error) {
       if (!mounted) {
@@ -155,9 +155,9 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

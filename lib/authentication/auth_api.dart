@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'app_config.dart';
+import '../app_config.dart';
 
 class AuthApiException implements Exception {
   AuthApiException(this.message);
@@ -13,14 +13,12 @@ class AuthApiException implements Exception {
 }
 
 class AuthApi {
-  AuthApi({
-    String? baseUrl,
-    HttpClient? client,
-  })  : baseUrl = (baseUrl ?? AppConfig.apiHostname).replaceAll(
-          RegExp(r'/$'),
-          '',
-        ),
-        _client = client ?? HttpClient();
+  AuthApi({String? baseUrl, HttpClient? client})
+    : baseUrl = (baseUrl ?? AppConfig.apiHostname).replaceAll(
+        RegExp(r'/$'),
+        '',
+      ),
+      _client = client ?? HttpClient();
 
   final String baseUrl;
   final HttpClient _client;
@@ -43,8 +41,7 @@ class AuthApi {
   }
 
   Future<String> resendActivation(String email) async {
-    final body =
-        await _post('/auth/email/resend-activation', {'email': email});
+    final body = await _post('/auth/email/resend-activation', {'email': email});
     return _messageFrom(body);
   }
 

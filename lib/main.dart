@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'app_config.dart';
-import 'auth_api.dart';
-import 'auth_flow.dart';
-import 'deep_link_service.dart';
-import 'expired_auth_link_page.dart';
-import 'login_page.dart';
-import 'otp_email_verification.dart';
+import 'authentication/auth_api.dart';
+import 'authentication/auth_flow.dart';
+import 'authentication/deep_link_service.dart';
+import 'authentication/expired_auth_link_page.dart';
+import 'authentication/login_page.dart';
+import 'authentication/otp_email_verification.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,10 +43,10 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _openAuthLink(AuthDeepLink link) async {
     final navigator = _navigatorKey.currentState;
-    final messengerContext = navigator?.context;
-    if (navigator == null || messengerContext == null) {
+    if (navigator == null) {
       return;
     }
+    final messenger = ScaffoldMessenger.maybeOf(navigator.context);
 
     try {
       await _authApi.validateLink(
@@ -60,7 +60,9 @@ class _MyAppState extends State<MyApp> {
             email: link.email,
             token: link.token,
             initialOtp: link.otp,
-            flow: link.isActivation ? OtpFlow.activation : OtpFlow.passwordReset,
+            flow: link.isActivation
+                ? OtpFlow.activation
+                : OtpFlow.passwordReset,
           ),
         ),
       );
@@ -80,9 +82,7 @@ class _MyAppState extends State<MyApp> {
         return;
       }
 
-      ScaffoldMessenger.of(messengerContext).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      messenger?.showSnackBar(SnackBar(content: Text(error.message)));
     }
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../general/home_page.dart';
 import 'auth_api.dart';
 import 'forget_password.dart';
 
@@ -36,11 +37,24 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final response = await _authApi.login(email: email, password: password);
       final user = response['user'] as Map<String, dynamic>?;
-      final name = user?['name']?.toString() ?? email;
+      final name =
+          user?['name']?.toString() ?? response['name']?.toString() ?? email;
+      final role = userRoleFromValue(
+        user?['role'] ??
+            user?['user_role'] ??
+            user?['type'] ??
+            response['role'] ??
+            response['user_role'] ??
+            response['type'],
+      );
       if (!mounted) {
         return;
       }
-      _showMessage('Welcome, $name.');
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => HomePage(role: role, displayName: name),
+        ),
+      );
     } on AuthApiException catch (error) {
       if (!mounted) {
         return;
@@ -54,9 +68,9 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

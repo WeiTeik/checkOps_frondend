@@ -31,9 +31,13 @@ class DeepLinkService {
   }
 
   static Stream<AuthDeepLink> authLinks() {
-    return _events.receiveBroadcastStream().map((value) {
-      return parseAuthLink(value?.toString());
-    }).where((link) => link != null).cast<AuthDeepLink>();
+    return _events
+        .receiveBroadcastStream()
+        .map((value) {
+          return parseAuthLink(value?.toString());
+        })
+        .where((link) => link != null)
+        .cast<AuthDeepLink>();
   }
 
   static AuthDeepLink? parseAuthLink(String? value) {
@@ -49,8 +53,8 @@ class DeepLinkService {
     final route = uri.host.isNotEmpty
         ? uri.host
         : uri.pathSegments.isNotEmpty
-            ? uri.pathSegments.first
-            : '';
+        ? uri.pathSegments.first
+        : '';
     final flow = switch (route) {
       'activate-account' => 'activation',
       'reset-password' => 'password_reset',
@@ -65,11 +69,6 @@ class DeepLinkService {
       return null;
     }
 
-    return AuthDeepLink(
-      flow: flow,
-      email: email,
-      otp: otp,
-      token: token,
-    );
+    return AuthDeepLink(flow: flow, email: email, otp: otp, token: token);
   }
 }

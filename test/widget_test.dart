@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:checkops_frondend/main.dart';
-import 'package:checkops_frondend/reset_password.dart';
+import 'package:checkops_frondend/authentication/reset_password.dart';
 
 void main() {
   testWidgets('Login page shows required controls', (
@@ -87,7 +87,14 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(home: ResetPasswordPage(mode: PasswordScreenMode.set)),
+      const MaterialApp(
+        home: ResetPasswordPage(
+          email: 'test@example.com',
+          otp: '123456',
+          token: 'token',
+          mode: PasswordScreenMode.set,
+        ),
+      ),
     );
 
     expect(find.text('Set Password'), findsNWidgets(3));
@@ -100,7 +107,15 @@ void main() {
   testWidgets('Simple password is blocked by requirements', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: ResetPasswordPage()));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ResetPasswordPage(
+          email: 'test@example.com',
+          otp: '123456',
+          token: 'token',
+        ),
+      ),
+    );
 
     await tester.enterText(find.byType(EditableText).at(0), 'Password1!');
     await tester.enterText(find.byType(EditableText).at(1), 'Password1!');
