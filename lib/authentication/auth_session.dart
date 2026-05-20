@@ -198,11 +198,16 @@ class AuthSession {
 class AuthSessionManager {
   AuthSessionManager({AuthApi? authApi, FlutterSecureStorage? storage})
     : _authApi = authApi ?? AuthApi(),
-      _store = _AuthSessionStore(storage ?? const FlutterSecureStorage());
+      _store = _AuthSessionStore(storage ?? const FlutterSecureStorage()) {
+    AuthApi.accessTokenProvider = () => _session?.accessToken;
+    AuthApi.unauthorizedTokenHandler = _refreshAfterUnauthorized;
+  }
 
   final AuthApi _authApi;
   final _AuthSessionStore _store;
   AuthSession? _session;
+  bool _shouldPersistSession = false;
+  Future<AuthSession?>? _refreshInFlight;
 
   AuthSession? get session => _session;
 
@@ -220,6 +225,7 @@ class AuthSessionManager {
 
     if (storedSession.hasValidAccessToken) {
       _session = storedSession;
+      _shouldPersistSession = true;
       return storedSession;
     }
 
@@ -229,15 +235,13 @@ class AuthSessionManager {
     }
 
     try {
-      final response = await _authApi.refresh(
-        refreshToken: storedSession.refreshToken,
-      );
-      final refreshedSession = AuthSession.fromLoginResponse(response);
+      _session = storedSession;
+      _shouldPersistSession = true;
+      final refreshedSession = await _refreshSession(storedSession);
       if (refreshedSession == null) {
         await clear();
         return null;
       }
-      await remember(refreshedSession);
       return refreshedSession;
     } on AuthApiException {
       await clear();
@@ -250,6 +254,7 @@ class AuthSessionManager {
     required bool rememberMe,
   }) async {
     _session = session;
+    _shouldPersistSession = rememberMe;
     if (rememberMe) {
       await _store.write(session);
       return;
@@ -259,7 +264,55 @@ class AuthSessionManager {
 
   Future<void> remember(AuthSession session) async {
     _session = session;
+    _shouldPersistSession = true;
     await _store.write(session);
+  }
+
+  Future<String?> _refreshAfterUnauthorized(String expiredAccessToken) async {
+    final currentSession = _session;
+    if (currentSession == null) {
+      return null;
+    }
+
+    if (currentSession.accessToken != expiredAccessToken) {
+      return currentSession.accessToken;
+    }
+
+    if (!currentSession.hasValidRefreshToken) {
+      await clear();
+      return null;
+    }
+
+    final refreshedSession = await (_refreshInFlight ??= _refreshSession(
+      currentSession,
+    ));
+    _refreshInFlight = null;
+    return refreshedSession?.accessToken;
+  }
+
+  Future<AuthSession?> _refreshSession(AuthSession session) async {
+    try {
+      final response = await _authApi.refresh(
+        refreshToken: session.refreshToken,
+      );
+      final refreshedSession = AuthSession.fromLoginResponse(response);
+      if (refreshedSession == null) {
+        await clear();
+        return null;
+      }
+      await _saveRefreshedSession(refreshedSession);
+      return refreshedSession;
+    } on AuthApiException {
+      await clear();
+      return null;
+    }
+  }
+
+  Future<void> _saveRefreshedSession(AuthSession session) async {
+    _session = session;
+    if (_shouldPersistSession) {
+      await _store.write(session);
+    }
   }
 
   Future<void> updateCachedProfile({
@@ -281,7 +334,9 @@ class AuthSessionManager {
       profilePic: profilePic,
     );
     _session = updatedSession;
-    await _store.write(updatedSession);
+    if (_shouldPersistSession) {
+      await _store.write(updatedSession);
+    }
   }
 
   Future<void> logout() async {
@@ -299,6 +354,7 @@ class AuthSessionManager {
 
   Future<void> clear() async {
     _session = null;
+    _shouldPersistSession = false;
     await _store.clear();
   }
 }

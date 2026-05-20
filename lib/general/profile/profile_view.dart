@@ -41,7 +41,7 @@ class _ProfileView extends StatefulWidget {
 class _ProfileViewState extends State<_ProfileView> {
   static const _notificationKey = 'profile_notifications_enabled';
   static const _storage = FlutterSecureStorage();
-  final _authApi = AuthApi();
+  final _userApi = UserApi();
   final _imagePicker = ImagePicker();
 
   bool _notificationsEnabled = true;
@@ -99,7 +99,7 @@ class _ProfileViewState extends State<_ProfileView> {
 
     setState(() => _isRefreshing = true);
     try {
-      final user = await _authApi.getUser(
+      final user = await _userApi.getUser(
         userId: widget.userId,
         accessToken: widget.accessToken,
       );
@@ -207,7 +207,7 @@ class _ProfileViewState extends State<_ProfileView> {
 
     setState(() => _isUploadingProfilePic = true);
     try {
-      final user = await _authApi.updateUser(
+      final user = await _userApi.updateUser(
         userId: widget.userId,
         accessToken: widget.accessToken,
         profilePic: profilePic,

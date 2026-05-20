@@ -3,6 +3,10 @@ import 'dart:io';
 
 import '../app_config.dart';
 
+typedef AccessTokenProvider = String? Function();
+typedef UnauthorizedTokenHandler =
+    Future<String?> Function(String expiredAccessToken);
+
 class AuthApiException implements Exception {
   AuthApiException(this.message);
 
@@ -19,6 +23,9 @@ class AuthApi {
         '',
       ),
       _client = client ?? HttpClient();
+
+  static AccessTokenProvider? accessTokenProvider;
+  static UnauthorizedTokenHandler? unauthorizedTokenHandler;
 
   final String baseUrl;
   final HttpClient _client;
@@ -41,64 +48,6 @@ class AuthApi {
       bearerToken: accessToken,
     );
     return _messageFrom(body);
-  }
-
-  Future<Map<String, dynamic>> getUser({
-    required int userId,
-    required String accessToken,
-  }) async {
-    final body = await _request(
-      method: 'GET',
-      path: '/users/$userId',
-      bearerToken: accessToken,
-    );
-    return _userFrom(body);
-  }
-
-  Future<List<Map<String, dynamic>>> getUsers({
-    required String accessToken,
-    String? search,
-    List<String> roles = const [],
-    bool? active,
-  }) async {
-    final query = <String, List<String>>{
-      if (search != null && search.trim().isNotEmpty) 'search': [search.trim()],
-      if (roles.isNotEmpty) 'roles': roles,
-      if (active != null) 'active': [active.toString()],
-    };
-    final path = Uri(
-      path: '/users',
-      queryParameters: query.isEmpty ? null : query,
-    ).toString();
-
-    final body = await _request(
-      method: 'GET',
-      path: path,
-      bearerToken: accessToken,
-    );
-    final users = body['users'];
-    if (users is List) {
-      return users
-          .whereType<Map>()
-          .map((user) => Map<String, dynamic>.from(user))
-          .toList();
-    }
-    return const [];
-  }
-
-  Future<Map<String, dynamic>> updateUser({
-    required int userId,
-    required String accessToken,
-    String? name,
-    String? profilePic,
-  }) async {
-    final body = await _request(
-      method: 'PATCH',
-      path: '/users/$userId',
-      payload: {'name': ?name, 'profile_pic': ?profilePic},
-      bearerToken: accessToken,
-    );
-    return _userFrom(body);
   }
 
   Future<String> requestPasswordReset(String email) async {
@@ -163,7 +112,7 @@ class AuthApi {
     Map<String, dynamic> payload, {
     String? bearerToken,
   }) async {
-    return _request(
+    return request(
       method: 'POST',
       path: path,
       payload: payload,
@@ -171,10 +120,46 @@ class AuthApi {
     );
   }
 
-  Future<Map<String, dynamic>> _request({
+  Future<Map<String, dynamic>> request({
     required String method,
     required String path,
     Map<String, dynamic> payload = const <String, dynamic>{},
+    String? bearerToken,
+  }) async {
+    final effectiveBearerToken = bearerToken == null
+        ? null
+        : accessTokenProvider?.call() ?? bearerToken;
+    final response = await _sendRequest(
+      method: method,
+      path: path,
+      payload: payload,
+      bearerToken: effectiveBearerToken,
+    );
+
+    if (response.statusCode == HttpStatus.unauthorized &&
+        effectiveBearerToken != null &&
+        effectiveBearerToken.isNotEmpty) {
+      final nextBearerToken = await unauthorizedTokenHandler?.call(
+        effectiveBearerToken,
+      );
+      if (nextBearerToken != null && nextBearerToken.isNotEmpty) {
+        final retryResponse = await _sendRequest(
+          method: method,
+          path: path,
+          payload: payload,
+          bearerToken: nextBearerToken,
+        );
+        return _decodeResponse(retryResponse);
+      }
+    }
+
+    return _decodeResponse(response);
+  }
+
+  Future<_AuthApiResponse> _sendRequest({
+    required String method,
+    required String path,
+    required Map<String, dynamic> payload,
     String? bearerToken,
   }) async {
     final request = await _client.openUrl(method, Uri.parse('$baseUrl$path'));
@@ -191,7 +176,13 @@ class AuthApi {
 
     final response = await request.close();
     final rawBody = await response.transform(utf8.decoder).join();
-    final decoded = rawBody.isEmpty ? <String, dynamic>{} : jsonDecode(rawBody);
+    return _AuthApiResponse(statusCode: response.statusCode, body: rawBody);
+  }
+
+  Map<String, dynamic> _decodeResponse(_AuthApiResponse response) {
+    final decoded = response.body.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(response.body);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AuthApiException(_errorMessage(decoded));
@@ -201,14 +192,6 @@ class AuthApi {
       return decoded;
     }
 
-    return <String, dynamic>{};
-  }
-
-  Map<String, dynamic> _userFrom(Map<String, dynamic> body) {
-    final user = body['user'];
-    if (user is Map<String, dynamic>) {
-      return user;
-    }
     return <String, dynamic>{};
   }
 
@@ -228,4 +211,11 @@ class AuthApi {
     }
     return 'Something went wrong. Please try again.';
   }
+}
+
+class _AuthApiResponse {
+  const _AuthApiResponse({required this.statusCode, required this.body});
+
+  final int statusCode;
+  final String body;
 }
