@@ -39,6 +39,10 @@
 	<string>Select a profile picture for your CheckOps account.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>CheckOps needs camera access so operators can take task proof photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CheckOps needs photo library access so operators can upload task proof photos.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

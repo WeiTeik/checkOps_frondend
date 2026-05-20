@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../authentication/auth_api.dart';
 import 'checkops_bottom_nav.dart';
+import 'submit_proof_page.dart';
 
 enum UserRole { operator, qc, admin }
 
@@ -53,6 +54,7 @@ class _HomePageState extends State<HomePage> {
   late String _employeeId = widget.employeeId;
   late UserRole _role = widget.role;
   late String? _profilePic = widget.profilePic;
+  _Task? _selectedTask;
 
   bool get _isAdmin => _role == UserRole.admin;
 
@@ -76,79 +78,98 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final showSubmitProof =
+        !_isAdmin && _selectedIndex == 0 && _selectedTask != null;
+
     return Scaffold(
       backgroundColor: const Color(0xFF474747),
       body: SafeArea(
         bottom: false,
-        child: Column(
-          children: [
-            _HomeHeader(
-              title: _headerTitle,
-              role: _role,
-              displayName: _displayName,
-              profilePic: _profilePic,
-            ),
-            Expanded(
-              child: IndexedStack(
-                index: _selectedIndex,
-                children: _isAdmin
-                    ? [
-                        const _AdminDashboardView(),
-                        const _PlaceholderView(
-                          icon: Icons.groups_rounded,
-                          title: 'Users',
-                        ),
-                        const _PlaceholderView(
-                          icon: Icons.check_box_outlined,
-                          title: 'Tasks',
-                        ),
-                        const _PlaceholderView(
-                          icon: Icons.history_rounded,
-                          title: 'History',
-                        ),
-                        _ProfileView(
-                          isActive: _selectedIndex == 4,
-                          displayName: _displayName,
-                          email: _email,
-                          employeeId: _employeeId,
-                          role: _role,
-                          userId: widget.userId,
-                          accessToken: widget.accessToken,
-                          profilePic: _profilePic,
-                          onLogout: widget.onLogout,
-                          loginBuilder: widget.loginBuilder,
-                          onProfileChanged: _updateProfile,
-                        ),
-                      ]
-                    : [
-                        _TaskHomeView(role: _role),
-                        const _PlaceholderView(
-                          icon: Icons.history_rounded,
-                          title: 'History',
-                        ),
-                        _ProfileView(
-                          isActive: _selectedIndex == 2,
-                          displayName: _displayName,
-                          email: _email,
-                          employeeId: _employeeId,
-                          role: _role,
-                          userId: widget.userId,
-                          accessToken: widget.accessToken,
-                          profilePic: _profilePic,
-                          onLogout: widget.onLogout,
-                          loginBuilder: widget.loginBuilder,
-                          onProfileChanged: _updateProfile,
-                        ),
-                      ],
+        child: showSubmitProof
+            ? SubmitProofPage(
+                taskTitle: _selectedTask!.title,
+                taskTimeLabel: _selectedTask!.timeLabel,
+                onBack: () => setState(() => _selectedTask = null),
+              )
+            : Column(
+                children: [
+                  _HomeHeader(
+                    title: _headerTitle,
+                    role: _role,
+                    displayName: _displayName,
+                    profilePic: _profilePic,
+                  ),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _selectedIndex,
+                      children: _isAdmin
+                          ? [
+                              const _AdminDashboardView(),
+                              const _PlaceholderView(
+                                icon: Icons.groups_rounded,
+                                title: 'Users',
+                              ),
+                              const _PlaceholderView(
+                                icon: Icons.check_box_outlined,
+                                title: 'Tasks',
+                              ),
+                              const _PlaceholderView(
+                                icon: Icons.history_rounded,
+                                title: 'History',
+                              ),
+                              _ProfileView(
+                                isActive: _selectedIndex == 4,
+                                displayName: _displayName,
+                                email: _email,
+                                employeeId: _employeeId,
+                                role: _role,
+                                userId: widget.userId,
+                                accessToken: widget.accessToken,
+                                profilePic: _profilePic,
+                                onLogout: widget.onLogout,
+                                loginBuilder: widget.loginBuilder,
+                                onProfileChanged: _updateProfile,
+                              ),
+                            ]
+                          : [
+                              _TaskHomeView(
+                                role: _role,
+                                onPendingTaskSelected:
+                                    _role == UserRole.operator
+                                    ? (task) =>
+                                          setState(() => _selectedTask = task)
+                                    : null,
+                              ),
+                              const _PlaceholderView(
+                                icon: Icons.history_rounded,
+                                title: 'History',
+                              ),
+                              _ProfileView(
+                                isActive: _selectedIndex == 2,
+                                displayName: _displayName,
+                                email: _email,
+                                employeeId: _employeeId,
+                                role: _role,
+                                userId: widget.userId,
+                                accessToken: widget.accessToken,
+                                profilePic: _profilePic,
+                                onLogout: widget.onLogout,
+                                loginBuilder: widget.loginBuilder,
+                                onProfileChanged: _updateProfile,
+                              ),
+                            ],
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
       bottomNavigationBar: CheckOpsBottomNav(
         isAdmin: _isAdmin,
         currentIndex: _selectedIndex,
-        onChanged: (index) => setState(() => _selectedIndex = index),
+        onChanged: (index) => setState(() {
+          _selectedTask = null;
+          _selectedIndex = index;
+        }),
       ),
     );
   }
@@ -344,9 +365,10 @@ class _RoleChip extends StatelessWidget {
 }
 
 class _TaskHomeView extends StatefulWidget {
-  const _TaskHomeView({required this.role});
+  const _TaskHomeView({required this.role, this.onPendingTaskSelected});
 
   final UserRole role;
+  final ValueChanged<_Task>? onPendingTaskSelected;
 
   @override
   State<_TaskHomeView> createState() => _TaskHomeViewState();
@@ -501,8 +523,15 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
                     thickness: 1.5,
                     color: Color(0xFFB8B8B8),
                   ),
-                  itemBuilder: (context, index) =>
-                      _TaskTile(task: tasks[index]),
+                  itemBuilder: (context, index) {
+                    final task = tasks[index];
+                    return _TaskTile(
+                      task: task,
+                      onTap: task.status == _TaskStatus.pending
+                          ? () => widget.onPendingTaskSelected?.call(task)
+                          : null,
+                    );
+                  },
                 ),
         ),
       ],
@@ -948,9 +977,10 @@ class _StatusSummaryCard extends StatelessWidget {
 }
 
 class _TaskTile extends StatelessWidget {
-  const _TaskTile({required this.task});
+  const _TaskTile({required this.task, this.onTap});
 
   final _Task task;
+  final VoidCallback? onTap;
 
   bool get _isCompleted => task.status == _TaskStatus.completed;
 
@@ -961,7 +991,7 @@ class _TaskTile extends StatelessWidget {
         : const Color(0xFFFF8B2C);
 
     return InkWell(
-      onTap: () {},
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 18, 14),
         child: Column(
