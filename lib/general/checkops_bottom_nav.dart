@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class CheckOpsBottomNav extends StatelessWidget {
@@ -14,77 +15,114 @@ class CheckOpsBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rawBottomPadding = MediaQuery.viewPaddingOf(context).bottom;
+    final bottomPadding = switch (defaultTargetPlatform) {
+      TargetPlatform.android => rawBottomPadding < 12 ? 12.0 : rawBottomPadding,
+      TargetPlatform.iOS => rawBottomPadding.clamp(10.0, 24.0).toDouble(),
+      _ => rawBottomPadding,
+    };
     final items = isAdmin
-        ? const [
-            BottomNavigationBarItem(
+        ? const <_BottomNavItem>[
+            _BottomNavItem(
               icon: Icon(Icons.show_chart_rounded),
               label: 'Overview',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.groups_rounded),
-              label: 'Users',
-            ),
-            BottomNavigationBarItem(
+            _BottomNavItem(icon: Icon(Icons.groups_rounded), label: 'Users'),
+            _BottomNavItem(
               icon: Icon(Icons.check_box_outlined),
               label: 'Tasks',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history_rounded),
-              label: 'History',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_rounded),
-              label: 'Profile',
-            ),
+            _BottomNavItem(icon: Icon(Icons.history_rounded), label: 'History'),
+            _BottomNavItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
           ]
-        : const [
-            BottomNavigationBarItem(
+        : const <_BottomNavItem>[
+            _BottomNavItem(
               icon: Icon(Icons.check_box_outlined),
               label: 'Tasks',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history_rounded),
-              label: 'History',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_rounded),
-              label: 'Profile',
-            ),
+            _BottomNavItem(icon: Icon(Icons.history_rounded), label: 'History'),
+            _BottomNavItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
           ];
+    final iconSize = isAdmin ? 22.0 : 25.0;
 
     return Material(
       color: const Color(0xFF474747),
-      child: SafeArea(
-        top: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Divider(height: 1, thickness: 1, color: Color(0xFFB8B8B8)),
+          SizedBox(
+            height: 63,
+            child: Row(
+              children: [
+                for (var index = 0; index < items.length; index++)
+                  Expanded(
+                    child: _BottomNavButton(
+                      item: items[index],
+                      iconSize: iconSize,
+                      isSelected: index == currentIndex,
+                      onTap: () => onChanged(index),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          SizedBox(height: bottomPadding),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomNavItem {
+  const _BottomNavItem({required this.icon, required this.label});
+
+  final Icon icon;
+  final String label;
+}
+
+class _BottomNavButton extends StatelessWidget {
+  const _BottomNavButton({
+    required this.item,
+    required this.iconSize,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final _BottomNavItem item;
+  final double iconSize;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isSelected ? Colors.white : const Color(0xFFC7C7C7);
+
+    return InkResponse(
+      onTap: onTap,
+      containedInkWell: true,
+      highlightShape: BoxShape.rectangle,
+      radius: 28,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Divider(height: 1, thickness: 1, color: Color(0xFFB8B8B8)),
-            Theme(
-              data: Theme.of(context).copyWith(
-                splashFactory: NoSplash.splashFactory,
-                splashColor: Colors.transparent,
-                highlightColor: Colors.transparent,
-                hoverColor: Colors.transparent,
-              ),
-              child: BottomNavigationBar(
-                currentIndex: currentIndex,
-                onTap: onChanged,
-                type: BottomNavigationBarType.fixed,
-                backgroundColor: const Color(0xFF474747),
-                selectedItemColor: Colors.white,
-                unselectedItemColor: const Color(0xFFC7C7C7),
-                selectedLabelStyle: const TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 0,
-                ),
-                unselectedLabelStyle: const TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 0,
-                ),
-                iconSize: isAdmin ? 22 : 25,
-                enableFeedback: false,
-                items: items,
+            IconTheme(
+              data: IconThemeData(color: color, size: iconSize),
+              child: item.icon,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              item.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0,
               ),
             ),
           ],

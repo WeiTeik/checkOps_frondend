@@ -516,7 +516,7 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
           child: tasks.isEmpty
               ? const _EmptyTasksView()
               : ListView.separated(
-                  padding: EdgeInsets.zero,
+                  padding: const EdgeInsets.only(bottom: 12),
                   itemCount: tasks.length,
                   separatorBuilder: (context, index) => const Divider(
                     height: 1,
