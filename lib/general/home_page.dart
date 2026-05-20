@@ -86,6 +86,7 @@ class _HomePageState extends State<HomePage> {
               title: _headerTitle,
               role: _role,
               displayName: _displayName,
+              profilePic: _profilePic,
             ),
             Expanded(
               child: IndexedStack(
@@ -181,11 +182,13 @@ class _HomeHeader extends StatelessWidget {
     required this.title,
     required this.role,
     required this.displayName,
+    required this.profilePic,
   });
 
   final String title;
   final UserRole role;
   final String displayName;
+  final String? profilePic;
 
   @override
   Widget build(BuildContext context) {
@@ -215,18 +218,7 @@ class _HomeHeader extends StatelessWidget {
             ),
             _RoleChip(role: role),
             const SizedBox(width: 10),
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: const Color(0xFF97DBFF),
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: Color(0xFF078DFF),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
+            _HeaderProfileAvatar(initials: initials, profilePic: profilePic),
           ],
         ),
       ),
@@ -247,6 +239,71 @@ class _HomeHeader extends StatelessWidget {
     }
     return '${words.first.characters.first}${words.last.characters.first}'
         .toUpperCase();
+  }
+}
+
+class _HeaderProfileAvatar extends StatelessWidget {
+  const _HeaderProfileAvatar({
+    required this.initials,
+    required this.profilePic,
+  });
+
+  final String initials;
+  final String? profilePic;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = _profileImage(profilePic);
+
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: const BoxDecoration(
+        color: Color(0xFF97DBFF),
+        shape: BoxShape.circle,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child:
+          image ??
+          Center(
+            child: Text(
+              initials,
+              style: const TextStyle(
+                color: Color(0xFF078DFF),
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+    );
+  }
+
+  Widget? _profileImage(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    if (value.startsWith('data:image/')) {
+      final commaIndex = value.indexOf(',');
+      if (commaIndex == -1) {
+        return null;
+      }
+      return Image.memory(
+        base64Decode(value.substring(commaIndex + 1)),
+        key: ValueKey(value),
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+      );
+    }
+
+    return Image.network(
+      value,
+      key: ValueKey(value),
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+    );
   }
 }
 
@@ -1988,14 +2045,22 @@ class _ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final image = _profileImage(profilePic);
+
     return Stack(
       children: [
-        CircleAvatar(
-          radius: 74,
-          backgroundColor: const Color(0xFFD9D9D9),
-          backgroundImage: _imageProvider(profilePic),
-          child: _imageProvider(profilePic) == null
-              ? Text(
+        Container(
+          width: 148,
+          height: 148,
+          decoration: const BoxDecoration(
+            color: Color(0xFFD9D9D9),
+            shape: BoxShape.circle,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child:
+              image ??
+              Center(
+                child: Text(
                   _initialsFor(displayName),
                   style: const TextStyle(
                     color: Color(0xFF8F8F8F),
@@ -2003,8 +2068,8 @@ class _ProfileAvatar extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0,
                   ),
-                )
-              : null,
+                ),
+              ),
         ),
         if (isEditing)
           Positioned(
@@ -2024,18 +2089,32 @@ class _ProfileAvatar extends StatelessWidget {
     );
   }
 
-  ImageProvider? _imageProvider(String? value) {
+  Widget? _profileImage(String? value) {
     if (value == null || value.isEmpty) {
       return null;
     }
+
     if (value.startsWith('data:image/')) {
       final commaIndex = value.indexOf(',');
       if (commaIndex == -1) {
         return null;
       }
-      return MemoryImage(base64Decode(value.substring(commaIndex + 1)));
+      return Image.memory(
+        base64Decode(value.substring(commaIndex + 1)),
+        key: ValueKey(value),
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+      );
     }
-    return NetworkImage(value);
+
+    return Image.network(
+      value,
+      key: ValueKey(value),
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+    );
   }
 
   String _initialsFor(String name) {
