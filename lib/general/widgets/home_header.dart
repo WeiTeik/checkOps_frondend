@@ -6,12 +6,14 @@ class _HomeHeader extends StatelessWidget {
     required this.role,
     required this.displayName,
     required this.profilePic,
+    required this.showAccountActions,
   });
 
   final String title;
   final UserRole role;
   final String displayName;
   final String? profilePic;
+  final bool showAccountActions;
 
   @override
   Widget build(BuildContext context) {
@@ -22,27 +24,35 @@ class _HomeHeader extends StatelessWidget {
         color: Color(0xFF474747),
         border: Border(bottom: BorderSide(color: Color(0xFFB8B8B8), width: 1)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 10, 16, 10),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 21,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0,
+      child: SizedBox(
+        height: 68,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 10, 16, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
                 ),
               ),
-            ),
-            _RoleChip(role: role),
-            const SizedBox(width: 10),
-            _HeaderProfileAvatar(initials: initials, profilePic: profilePic),
-          ],
+              if (showAccountActions) ...[
+                _RoleChip(role: role),
+                const SizedBox(width: 10),
+                _HeaderProfileAvatar(
+                  initials: initials,
+                  profilePic: profilePic,
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

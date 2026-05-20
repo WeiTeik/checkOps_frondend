@@ -87,6 +87,8 @@ class _HomePageState extends State<HomePage> {
 
   bool get _isAdmin => _role == UserRole.admin;
 
+  bool get _isProfileTab => _selectedIndex == (_isAdmin ? 4 : 2);
+
   String get _headerTitle {
     if (_isAdmin) {
       return switch (_selectedIndex) {
@@ -127,6 +129,7 @@ class _HomePageState extends State<HomePage> {
                     role: _role,
                     displayName: _displayName,
                     profilePic: _profilePic,
+                    showAccountActions: !_isProfileTab,
                   ),
                   Expanded(
                     child: IndexedStack(
