@@ -52,7 +52,7 @@ class CheckOpsBottomNav extends StatelessWidget {
         children: [
           const Divider(height: 1, thickness: 1, color: Color(0xFFB8B8B8)),
           SizedBox(
-            height: 63,
+            height: 50,
             child: Row(
               children: [
                 for (var index = 0; index < items.length; index++)
