@@ -55,6 +55,37 @@ class AuthApi {
     return _userFrom(body);
   }
 
+  Future<List<Map<String, dynamic>>> getUsers({
+    required String accessToken,
+    String? search,
+    List<String> roles = const [],
+    bool? active,
+  }) async {
+    final query = <String, List<String>>{
+      if (search != null && search.trim().isNotEmpty) 'search': [search.trim()],
+      if (roles.isNotEmpty) 'roles': roles,
+      if (active != null) 'active': [active.toString()],
+    };
+    final path = Uri(
+      path: '/users',
+      queryParameters: query.isEmpty ? null : query,
+    ).toString();
+
+    final body = await _request(
+      method: 'GET',
+      path: path,
+      bearerToken: accessToken,
+    );
+    final users = body['users'];
+    if (users is List) {
+      return users
+          .whereType<Map>()
+          .map((user) => Map<String, dynamic>.from(user))
+          .toList();
+    }
+    return const [];
+  }
+
   Future<Map<String, dynamic>> updateUser({
     required int userId,
     required String accessToken,
