@@ -58,13 +58,13 @@ class AuthApi {
   Future<Map<String, dynamic>> updateUser({
     required int userId,
     required String accessToken,
-    required String name,
+    String? name,
     String? profilePic,
   }) async {
     final body = await _request(
       method: 'PATCH',
       path: '/users/$userId',
-      payload: {'name': name, 'profile_pic': ?profilePic},
+      payload: {'name': ?name, 'profile_pic': ?profilePic},
       bearerToken: accessToken,
     );
     return _userFrom(body);

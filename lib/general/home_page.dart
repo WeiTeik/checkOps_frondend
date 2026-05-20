@@ -1697,16 +1697,11 @@ class _ProfileViewState extends State<_ProfileView> {
   static const _storage = FlutterSecureStorage();
   final _authApi = AuthApi();
   final _imagePicker = ImagePicker();
-  late final TextEditingController _nameController = TextEditingController(
-    text: widget.displayName,
-  );
 
   bool _notificationsEnabled = true;
   bool _isLoggingOut = false;
-  bool _isEditing = false;
   bool _isRefreshing = false;
-  bool _isSaving = false;
-  String? _draftProfilePic;
+  bool _isUploadingProfilePic = false;
 
   @override
   void initState() {
@@ -1720,18 +1715,9 @@ class _ProfileViewState extends State<_ProfileView> {
   @override
   void didUpdateWidget(covariant _ProfileView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_isEditing && widget.displayName != oldWidget.displayName) {
-      _nameController.text = widget.displayName;
-    }
     if (widget.isActive && !oldWidget.isActive) {
       _refreshProfile();
     }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadNotificationSetting() async {
@@ -1806,16 +1792,59 @@ class _ProfileViewState extends State<_ProfileView> {
       role: role,
       profilePic: profilePic,
     );
-
-    if (!mounted || _isEditing) {
-      return;
-    }
-    _nameController.text = displayName;
   }
 
-  Future<void> _pickProfileImage() async {
+  Future<void> _openProfileImageOptions() async {
+    if (_isUploadingProfilePic) {
+      return;
+    }
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: const Color(0xFF303030),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(
+                  Icons.photo_camera_rounded,
+                  color: Colors.white,
+                ),
+                title: const Text(
+                  'Take photo',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.photo_library_rounded,
+                  color: Colors.white,
+                ),
+                title: const Text(
+                  'Choose from gallery',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (source == null) {
+      return;
+    }
+
+    await _pickAndUploadProfileImage(source);
+  }
+
+  Future<void> _pickAndUploadProfileImage(ImageSource source) async {
     final pickedImage = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
+      source: source,
       imageQuality: 72,
       maxWidth: 600,
       maxHeight: 600,
@@ -1828,39 +1857,22 @@ class _ProfileViewState extends State<_ProfileView> {
     final extension = pickedImage.name.toLowerCase().endsWith('.png')
         ? 'png'
         : 'jpeg';
-    setState(() {
-      _draftProfilePic = 'data:image/$extension;base64,${base64Encode(bytes)}';
-    });
-  }
+    final profilePic = 'data:image/$extension;base64,${base64Encode(bytes)}';
 
-  Future<void> _saveProfile() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Name cannot be empty.')));
-      return;
-    }
-
-    setState(() => _isSaving = true);
+    setState(() => _isUploadingProfilePic = true);
     try {
       final user = await _authApi.updateUser(
         userId: widget.userId,
         accessToken: widget.accessToken,
-        name: name,
-        profilePic: _draftProfilePic,
+        profilePic: profilePic,
       );
       await _applyUser(user);
       if (!mounted) {
         return;
       }
-      setState(() {
-        _isEditing = false;
-        _draftProfilePic = null;
-      });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
+      ).showSnackBar(const SnackBar(content: Text('Profile picture updated.')));
     } on AuthApiException catch (error) {
       if (!mounted) {
         return;
@@ -1870,25 +1882,9 @@ class _ProfileViewState extends State<_ProfileView> {
       ).showSnackBar(SnackBar(content: Text(error.message)));
     } finally {
       if (mounted) {
-        setState(() => _isSaving = false);
+        setState(() => _isUploadingProfilePic = false);
       }
     }
-  }
-
-  void _startEditing() {
-    setState(() {
-      _isEditing = true;
-      _draftProfilePic = widget.profilePic;
-      _nameController.text = widget.displayName;
-    });
-  }
-
-  void _cancelEditing() {
-    setState(() {
-      _isEditing = false;
-      _draftProfilePic = null;
-      _nameController.text = widget.displayName;
-    });
   }
 
   Future<void> _logout() async {
@@ -1923,34 +1919,17 @@ class _ProfileViewState extends State<_ProfileView> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(28, 24, 28, 36),
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: IconButton(
-            onPressed: _isSaving
-                ? null
-                : (_isEditing ? _cancelEditing : _startEditing),
-            tooltip: _isEditing ? 'Cancel edit' : 'Edit profile',
-            icon: Icon(_isEditing ? Icons.close_rounded : Icons.edit_rounded),
-            color: Colors.white,
-            iconSize: 24,
-          ),
-        ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 32),
         Center(
           child: _ProfileAvatar(
             displayName: widget.displayName,
-            profilePic: _isEditing ? _draftProfilePic : widget.profilePic,
-            isEditing: _isEditing,
-            onPickImage: _pickProfileImage,
+            profilePic: widget.profilePic,
+            isUploading: _isUploadingProfilePic,
+            onPickImage: _openProfileImageOptions,
           ),
         ),
         const SizedBox(height: 6),
-        _ProfileField(
-          label: 'Name',
-          value: widget.displayName,
-          controller: _nameController,
-          isEditable: _isEditing,
-        ),
+        _ProfileField(label: 'Name', value: widget.displayName),
         const SizedBox(height: 10),
         _ProfileField(label: 'Email', value: widget.email),
         const SizedBox(height: 10),
@@ -1985,42 +1964,6 @@ class _ProfileViewState extends State<_ProfileView> {
             ),
           ],
         ),
-        if (_isEditing) ...[
-          const SizedBox(height: 22),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _isSaving ? null : _cancelEditing,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white, width: 1.5),
-                    minimumSize: const Size.fromHeight(46),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _isSaving ? null : _saveProfile,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF1796D2),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(46),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(_isSaving ? 'Saving...' : 'Save'),
-                ),
-              ),
-            ],
-          ),
-        ],
         const SizedBox(height: 28),
         FilledButton(
           onPressed: _isLoggingOut ? null : _logout,
@@ -2064,13 +2007,13 @@ class _ProfileAvatar extends StatelessWidget {
   const _ProfileAvatar({
     required this.displayName,
     required this.profilePic,
-    required this.isEditing,
+    required this.isUploading,
     required this.onPickImage,
   });
 
   final String displayName;
   final String? profilePic;
-  final bool isEditing;
+  final bool isUploading;
   final VoidCallback onPickImage;
 
   @override
@@ -2083,7 +2026,7 @@ class _ProfileAvatar extends StatelessWidget {
           width: 148,
           height: 148,
           decoration: const BoxDecoration(
-            color: Color(0xFFD9D9D9),
+            color: Color(0xFF97DBFF),
             shape: BoxShape.circle,
           ),
           clipBehavior: Clip.antiAlias,
@@ -2093,7 +2036,7 @@ class _ProfileAvatar extends StatelessWidget {
                 child: Text(
                   _initialsFor(displayName),
                   style: const TextStyle(
-                    color: Color(0xFF8F8F8F),
+                    color: Color(0xFF078DFF),
                     fontSize: 36,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0,
@@ -2101,20 +2044,28 @@ class _ProfileAvatar extends StatelessWidget {
                 ),
               ),
         ),
-        if (isEditing)
-          Positioned(
-            right: 6,
-            bottom: 8,
-            child: IconButton.filled(
-              onPressed: onPickImage,
-              tooltip: 'Upload profile picture',
-              icon: const Icon(Icons.camera_alt_rounded),
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF1796D2),
-                foregroundColor: Colors.white,
-              ),
+        Positioned(
+          right: 6,
+          bottom: 8,
+          child: IconButton.filled(
+            onPressed: isUploading ? null : onPickImage,
+            tooltip: 'Change profile picture',
+            icon: isUploading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.camera_alt_rounded),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFF1796D2),
+              foregroundColor: Colors.white,
             ),
           ),
+        ),
       ],
     );
   }
@@ -2165,17 +2116,10 @@ class _ProfileAvatar extends StatelessWidget {
 }
 
 class _ProfileField extends StatelessWidget {
-  const _ProfileField({
-    required this.label,
-    required this.value,
-    this.controller,
-    this.isEditable = false,
-  });
+  const _ProfileField({required this.label, required this.value});
 
   final String label;
   final String value;
-  final TextEditingController? controller;
-  final bool isEditable;
 
   @override
   Widget build(BuildContext context) {
@@ -2194,49 +2138,26 @@ class _ProfileField extends StatelessWidget {
         const SizedBox(height: 3),
         SizedBox(
           height: 40,
-          child: isEditable
-              ? TextField(
-                  controller: controller,
-                  textInputAction: TextInputAction.done,
-                  style: const TextStyle(color: Color(0xFF202020)),
-                  decoration: const InputDecoration(
-                    filled: true,
-                    fillColor: Color(0xFFD9D9D9),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(4)),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(4)),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(4)),
-                      borderSide: BorderSide(color: Colors.white, width: 1.5),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                  ),
-                )
-              : Container(
-                  width: double.infinity,
-                  alignment: Alignment.centerLeft,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD9D9D9),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF202020),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ),
+          child: Container(
+            width: double.infinity,
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD9D9D9),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF202020),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
         ),
       ],
     );
