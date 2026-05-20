@@ -52,21 +52,28 @@ class CheckOpsBottomNav extends StatelessWidget {
             ),
           ];
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Color(0xFF8A8A8A), width: 1)),
-      ),
-      child: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: onChanged,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color(0xFF474747),
-        selectedItemColor: Colors.white,
-        unselectedItemColor: const Color(0xFFC7C7C7),
-        selectedLabelStyle: const TextStyle(fontSize: 11, letterSpacing: 0),
-        unselectedLabelStyle: const TextStyle(fontSize: 11, letterSpacing: 0),
-        iconSize: isAdmin ? 22 : 25,
-        items: items,
+    return Transform.translate(
+      offset: const Offset(0, 16),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          splashFactory: NoSplash.splashFactory,
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+        ),
+        child: BottomNavigationBar(
+          currentIndex: currentIndex,
+          onTap: onChanged,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: const Color(0xFF474747),
+          selectedItemColor: Colors.white,
+          unselectedItemColor: const Color(0xFFC7C7C7),
+          selectedLabelStyle: const TextStyle(fontSize: 11, letterSpacing: 0),
+          unselectedLabelStyle: const TextStyle(fontSize: 11, letterSpacing: 0),
+          iconSize: 25,
+          enableFeedback: false,
+          items: items,
+        ),
       ),
     );
   }
