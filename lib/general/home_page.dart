@@ -1,14 +1,46 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../authentication/auth_api.dart';
 import 'checkops_bottom_nav.dart';
 
 enum UserRole { operator, qc, admin }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.role, required this.displayName});
+  const HomePage({
+    super.key,
+    required this.role,
+    required this.displayName,
+    required this.email,
+    required this.employeeId,
+    required this.userId,
+    required this.accessToken,
+    this.profilePic,
+    this.onLogout,
+    this.loginBuilder,
+    this.onProfileUpdated,
+  });
 
   final UserRole role;
   final String displayName;
+  final String email;
+  final String employeeId;
+  final int userId;
+  final String accessToken;
+  final String? profilePic;
+  final Future<void> Function()? onLogout;
+  final WidgetBuilder? loginBuilder;
+  final Future<void> Function({
+    required String displayName,
+    required String email,
+    required String employeeId,
+    required UserRole role,
+    String? profilePic,
+  })?
+  onProfileUpdated;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -16,15 +48,21 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
+  late String _displayName = widget.displayName;
+  late String _email = widget.email;
+  late String _employeeId = widget.employeeId;
+  late UserRole _role = widget.role;
+  late String? _profilePic = widget.profilePic;
 
-  bool get _isAdmin => widget.role == UserRole.admin;
+  bool get _isAdmin => _role == UserRole.admin;
 
   String get _headerTitle {
     if (_isAdmin) {
       return switch (_selectedIndex) {
         0 => 'Dashboard',
         1 => 'Users',
-        2 => 'Reports',
+        2 => 'Tasks',
+        3 => 'History',
         _ => 'Profile',
       };
     }
@@ -46,37 +84,59 @@ class _HomePageState extends State<HomePage> {
           children: [
             _HomeHeader(
               title: _headerTitle,
-              role: widget.role,
-              displayName: widget.displayName,
+              role: _role,
+              displayName: _displayName,
             ),
             Expanded(
               child: IndexedStack(
                 index: _selectedIndex,
                 children: _isAdmin
-                    ? const [
-                        _AdminDashboardView(),
-                        _PlaceholderView(
+                    ? [
+                        const _AdminDashboardView(),
+                        const _PlaceholderView(
                           icon: Icons.groups_rounded,
                           title: 'Users',
                         ),
-                        _PlaceholderView(
-                          icon: Icons.analytics_rounded,
-                          title: 'Reports',
+                        const _PlaceholderView(
+                          icon: Icons.check_box_outlined,
+                          title: 'Tasks',
                         ),
-                        _PlaceholderView(
-                          icon: Icons.person_rounded,
-                          title: 'Profile',
-                        ),
-                      ]
-                    : [
-                        _TaskHomeView(role: widget.role),
                         const _PlaceholderView(
                           icon: Icons.history_rounded,
                           title: 'History',
                         ),
+                        _ProfileView(
+                          isActive: _selectedIndex == 4,
+                          displayName: _displayName,
+                          email: _email,
+                          employeeId: _employeeId,
+                          role: _role,
+                          userId: widget.userId,
+                          accessToken: widget.accessToken,
+                          profilePic: _profilePic,
+                          onLogout: widget.onLogout,
+                          loginBuilder: widget.loginBuilder,
+                          onProfileChanged: _updateProfile,
+                        ),
+                      ]
+                    : [
+                        _TaskHomeView(role: _role),
                         const _PlaceholderView(
-                          icon: Icons.person_rounded,
-                          title: 'Profile',
+                          icon: Icons.history_rounded,
+                          title: 'History',
+                        ),
+                        _ProfileView(
+                          isActive: _selectedIndex == 2,
+                          displayName: _displayName,
+                          email: _email,
+                          employeeId: _employeeId,
+                          role: _role,
+                          userId: widget.userId,
+                          accessToken: widget.accessToken,
+                          profilePic: _profilePic,
+                          onLogout: widget.onLogout,
+                          loginBuilder: widget.loginBuilder,
+                          onProfileChanged: _updateProfile,
                         ),
                       ],
               ),
@@ -89,6 +149,29 @@ class _HomePageState extends State<HomePage> {
         currentIndex: _selectedIndex,
         onChanged: (index) => setState(() => _selectedIndex = index),
       ),
+    );
+  }
+
+  Future<void> _updateProfile({
+    required String displayName,
+    required String email,
+    required String employeeId,
+    required UserRole role,
+    String? profilePic,
+  }) async {
+    setState(() {
+      _displayName = displayName;
+      _email = email;
+      _employeeId = employeeId;
+      _role = role;
+      _profilePic = profilePic;
+    });
+    await widget.onProfileUpdated?.call(
+      displayName: displayName,
+      email: email,
+      employeeId: employeeId,
+      role: role,
+      profilePic: profilePic,
     );
   }
 }
@@ -912,69 +995,92 @@ class _AdminDashboardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      padding: EdgeInsets.zero,
       children: const [
-        Row(
-          children: [
-            Expanded(
-              child: _AdminMetricCard(
-                icon: Icons.assignment_turned_in_rounded,
-                value: '17',
-                label: 'Active Tasks',
-                color: Color(0xFF97DBFF),
+        Padding(
+          padding: EdgeInsets.fromLTRB(20, 22, 20, 16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _AdminMetricCard(
+                      value: '3',
+                      label: 'Pending',
+                      color: Color(0xFFFF8B2C),
+                    ),
+                  ),
+                  SizedBox(width: 18),
+                  Expanded(
+                    child: _AdminMetricCard(
+                      value: '2',
+                      label: 'Completed',
+                      color: Color(0xFF00B316),
+                    ),
+                  ),
+                  SizedBox(width: 18),
+                  Expanded(
+                    child: _AdminMetricCard(
+                      value: '1',
+                      label: 'Failed',
+                      color: Color(0xFFFF1E1E),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: _AdminMetricCard(
-                icon: Icons.groups_rounded,
-                value: '24',
-                label: 'Users',
-                color: Color(0xFF7CFF8A),
+              SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _AdminMetricCard(
+                      value: '3',
+                      label: 'Approved',
+                      color: Color(0xFF00B316),
+                    ),
+                  ),
+                  SizedBox(width: 18),
+                  Expanded(
+                    child: _AdminMetricCard(
+                      value: '2',
+                      label: 'Rejected',
+                      color: Color(0xFFFF1E1E),
+                    ),
+                  ),
+                  SizedBox(width: 18),
+                  Expanded(
+                    child: _AdminMetricCard(
+                      value: '1',
+                      label: 'Expired',
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _AdminMetricCard(
-                icon: Icons.warning_amber_rounded,
-                value: '5',
-                label: 'Pending QC',
-                color: Color(0xFFFFD59B),
-              ),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: _AdminMetricCard(
-                icon: Icons.fact_check_rounded,
-                value: '12',
-                label: 'Completed',
-                color: Color(0xFFD2B5FF),
-              ),
-            ),
-          ],
+        _AdminOverviewHeader(),
+        SizedBox(height: 16),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 18),
+          child: _AdminChartCard(
+            axisLabel: 'Submission',
+            title: 'Operator Task Submission',
+            accentColor: Color(0xFF67D8FF),
+            values: [0, 2, 1, 3.5, 2.8, 1, 4.2, 0, 1.8],
+          ),
         ),
-        SizedBox(height: 22),
-        _AdminSectionHeader(title: 'Operations'),
-        SizedBox(height: 12),
-        _AdminActionTile(
-          icon: Icons.person_add_alt_1_rounded,
-          title: 'Manage Users',
-          subtitle: 'Create operators, QC users, and administrators',
+        SizedBox(height: 16),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 18),
+          child: _AdminChartCard(
+            axisLabel: 'Reviews',
+            title: 'Tasks Reviewed by QC',
+            accentColor: Color(0xFF7CFF8A),
+            values: [0, 2, 1, 3.5, 2.8, 1, 4.2, 0, 1.8],
+          ),
         ),
-        _AdminActionTile(
-          icon: Icons.playlist_add_check_rounded,
-          title: 'Assign Tasks',
-          subtitle: 'Schedule inspections and station checks',
-        ),
-        _AdminActionTile(
-          icon: Icons.bar_chart_rounded,
-          title: 'Review Reports',
-          subtitle: 'Track completion status and quality findings',
-        ),
+        SizedBox(height: 30),
       ],
     );
   }
@@ -982,135 +1088,1100 @@ class _AdminDashboardView extends StatelessWidget {
 
 class _AdminMetricCard extends StatelessWidget {
   const _AdminMetricCard({
-    required this.icon,
     required this.value,
     required this.label,
     required this.color,
   });
 
-  final IconData icon;
   final String value;
   final String label;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 102,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF333333),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 23),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
+    return AspectRatio(
+      aspectRatio: 1.14,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFF303030),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
             ),
-          ),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
+            const SizedBox(height: 4),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _AdminSectionHeader extends StatelessWidget {
-  const _AdminSectionHeader({required this.title});
-
-  final String title;
+class _AdminOverviewHeader extends StatelessWidget {
+  const _AdminOverviewHeader();
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 18,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0,
+    return Container(
+      height: 42,
+      color: const Color(0xFF303030),
+      alignment: Alignment.center,
+      child: const Text(
+        'Operation Overview',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0,
+        ),
       ),
     );
   }
 }
 
-class _AdminActionTile extends StatelessWidget {
-  const _AdminActionTile({
-    required this.icon,
+class _AdminChartCard extends StatefulWidget {
+  const _AdminChartCard({
+    required this.axisLabel,
     required this.title,
-    required this.subtitle,
+    required this.accentColor,
+    required this.values,
   });
 
-  final IconData icon;
+  final String axisLabel;
   final String title;
-  final String subtitle;
+  final Color accentColor;
+  final List<double> values;
+
+  @override
+  State<_AdminChartCard> createState() => _AdminChartCardState();
+}
+
+class _AdminChartCardState extends State<_AdminChartCard> {
+  int? _activePointIndex;
+
+  void _setActivePoint(Offset position, Size size) {
+    final nextIndex = _nearestPointIndex(position, size);
+    if (nextIndex == _activePointIndex) {
+      return;
+    }
+    setState(() => _activePointIndex = nextIndex);
+  }
+
+  void _clearActivePoint() {
+    if (_activePointIndex == null) {
+      return;
+    }
+    setState(() => _activePointIndex = null);
+  }
+
+  int? _nearestPointIndex(Offset position, Size size) {
+    if (widget.values.length < 2) {
+      return null;
+    }
+
+    final plotRect = _AdminLineChartPainter.plotRectFor(size);
+    if (!plotRect.inflate(14).contains(position)) {
+      return null;
+    }
+
+    final chartWidth = plotRect.width;
+    final chartHeight = plotRect.height;
+    final originY = plotRect.bottom;
+    var nearestIndex = 0;
+    var nearestDistance = double.infinity;
+
+    for (var index = 0; index < widget.values.length; index += 1) {
+      final x =
+          plotRect.left + (index / (widget.values.length - 1)) * chartWidth;
+      final y = originY - (widget.values[index] / 4.5) * chartHeight;
+      final distance = (Offset(x, y) - position).distance;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    }
+
+    return nearestDistance <= 24 ? nearestIndex : null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF333333),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF97DBFF), size: 23),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return TapRegion(
+      onTapOutside: (_) => _clearActivePoint(),
+      child: Container(
+        height: 176,
+        padding: const EdgeInsets.fromLTRB(12, 11, 14, 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF303030),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF3B3B3B)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: widget.accentColor,
+                    shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFFC7C7C7),
-                    fontSize: 12,
-                    letterSpacing: 0,
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 3),
+            Text(
+              widget.axisLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFFBDBDBD),
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final chartSize = Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  );
+
+                  return MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    onHover: (event) =>
+                        _setActivePoint(event.localPosition, chartSize),
+                    onExit: (_) => _clearActivePoint(),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (details) =>
+                          _setActivePoint(details.localPosition, chartSize),
+                      child: CustomPaint(
+                        painter: _AdminLineChartPainter(
+                          values: widget.values,
+                          accentColor: widget.accentColor,
+                          activePointIndex: _activePointIndex,
+                        ),
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminLineChartPainter extends CustomPainter {
+  const _AdminLineChartPainter({
+    required this.values,
+    required this.accentColor,
+    required this.activePointIndex,
+  });
+
+  static const _leftInset = 26.0;
+  static const _rightInset = 4.0;
+  static const _bottomInset = 17.0;
+  static const _topInset = 7.0;
+
+  final List<double> values;
+  final Color accentColor;
+  final int? activePointIndex;
+
+  static Rect plotRectFor(Size size) {
+    return Rect.fromLTWH(
+      _leftInset,
+      _topInset,
+      size.width - _leftInset - _rightInset,
+      size.height - _topInset - _bottomInset,
+    );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final plotRect = plotRectFor(size);
+    final chartWidth = plotRect.width;
+    final chartHeight = plotRect.height;
+    final origin = Offset(plotRect.left, plotRect.bottom);
+    final plotRRect = RRect.fromRectAndRadius(
+      plotRect,
+      const Radius.circular(7),
+    );
+    final gridPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.09)
+      ..strokeWidth = 1;
+    final axisPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.55)
+      ..strokeWidth = 1;
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          accentColor.withValues(alpha: 0.26),
+          accentColor.withValues(alpha: 0.03),
+        ],
+      ).createShader(plotRect);
+    final linePaint = Paint()
+      ..color = accentColor
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 2.2;
+    final glowPaint = Paint()
+      ..color = accentColor.withValues(alpha: 0.22)
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 7;
+    final pointPaint = Paint()..color = accentColor;
+    final pointBorderPaint = Paint()..color = const Color(0xFF303030);
+    final labelPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.right,
+    );
+
+    canvas.drawRRect(plotRRect, Paint()..color = const Color(0xFF292929));
+
+    for (final tick in [1, 2, 3, 4]) {
+      final y = origin.dy - (tick / 4.5) * chartHeight;
+      canvas.drawLine(
+        Offset(plotRect.left, y),
+        Offset(size.width - 4, y),
+        gridPaint,
+      );
+    }
+
+    for (var index = 1; index < values.length - 1; index += 2) {
+      final x = plotRect.left + (index / (values.length - 1)) * chartWidth;
+      canvas.drawLine(Offset(x, plotRect.top), Offset(x, origin.dy), gridPaint);
+    }
+
+    canvas.drawLine(Offset(plotRect.left, plotRect.top), origin, axisPaint);
+    canvas.drawLine(origin, Offset(size.width - 4, origin.dy), axisPaint);
+
+    for (final tick in [1, 2, 3]) {
+      final y = origin.dy - (tick / 4.5) * chartHeight;
+      labelPainter.text = TextSpan(
+        text: tick.toString(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+      labelPainter.layout(minWidth: 12, maxWidth: 12);
+      labelPainter.paint(canvas, Offset(4, y - labelPainter.height / 2));
+    }
+
+    if (values.length < 2) {
+      return;
+    }
+
+    final points = <Offset>[];
+    for (var index = 0; index < values.length; index += 1) {
+      final x = plotRect.left + (index / (values.length - 1)) * chartWidth;
+      final y = origin.dy - (values[index] / 4.5) * chartHeight;
+      points.add(Offset(x, y));
+    }
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var index = 1; index < points.length; index += 1) {
+      path.lineTo(points[index].dx, points[index].dy);
+    }
+
+    final fillPath = Path.from(path)
+      ..lineTo(points.last.dx, origin.dy)
+      ..lineTo(points.first.dx, origin.dy)
+      ..close();
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(path, glowPaint);
+    canvas.drawPath(path, linePaint);
+
+    if (activePointIndex case final activeIndex?
+        when activeIndex >= 0 && activeIndex < points.length) {
+      final point = points[activeIndex];
+      final guidePaint = Paint()
+        ..color = accentColor.withValues(alpha: 0.34)
+        ..strokeWidth = 1;
+      canvas.drawLine(
+        Offset(point.dx, plotRect.top),
+        Offset(point.dx, origin.dy),
+        guidePaint,
+      );
+      canvas.drawCircle(point, 6.8, pointBorderPaint);
+      canvas.drawCircle(point, 4, pointPaint);
+      _paintTooltip(
+        canvas: canvas,
+        size: size,
+        point: point,
+        label: 'Point ${activeIndex + 1}',
+        value: values[activeIndex],
+      );
+    }
+
+    final monthLabels = ['W1', 'W2', 'W3'];
+    for (var index = 0; index < monthLabels.length; index += 1) {
+      final x = plotRect.left + (index / (monthLabels.length - 1)) * chartWidth;
+      labelPainter.text = TextSpan(
+        text: monthLabels[index],
+        style: const TextStyle(
+          color: Color(0xFFBDBDBD),
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+      labelPainter.layout();
+      var labelX = x - labelPainter.width / 2;
+      if (index == 0) {
+        labelX = plotRect.left;
+      } else if (index == monthLabels.length - 1) {
+        labelX = size.width - 4 - labelPainter.width;
+      } else {
+        labelX = labelX.clamp(
+          plotRect.left,
+          size.width - 4 - labelPainter.width,
+        );
+      }
+      labelPainter.paint(canvas, Offset(labelX, origin.dy + 5));
+    }
+  }
+
+  void _paintTooltip({
+    required Canvas canvas,
+    required Size size,
+    required Offset point,
+    required String label,
+    required double value,
+  }) {
+    final tooltipPainter = TextPainter(
+      text: TextSpan(
+        children: [
+          TextSpan(
+            text: '$label\n',
+            style: const TextStyle(
+              color: Color(0xFFCFCFCF),
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: Colors.white70,
-            size: 22,
+          TextSpan(
+            text: value.toStringAsFixed(
+              value.truncateToDouble() == value ? 0 : 1,
+            ),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ],
       ),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.left,
+    )..layout();
+    final tooltipSize = Size(
+      tooltipPainter.width + 16,
+      tooltipPainter.height + 10,
     );
+    var left = point.dx - tooltipSize.width / 2;
+    var top = point.dy - tooltipSize.height - 12;
+    left = left.clamp(2, size.width - tooltipSize.width - 2);
+    if (top < 2) {
+      top = point.dy + 12;
+    }
+
+    final tooltipRect = Rect.fromLTWH(
+      left.toDouble(),
+      top.toDouble(),
+      tooltipSize.width,
+      tooltipSize.height,
+    );
+    final tooltipRRect = RRect.fromRectAndRadius(
+      tooltipRect,
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(tooltipRRect, Paint()..color = const Color(0xFF1F1F1F));
+    canvas.drawRRect(
+      tooltipRRect,
+      Paint()
+        ..color = accentColor.withValues(alpha: 0.42)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    tooltipPainter.paint(canvas, Offset(left + 8, top + 5));
+  }
+
+  @override
+  bool shouldRepaint(covariant _AdminLineChartPainter oldDelegate) {
+    return oldDelegate.values != values ||
+        oldDelegate.accentColor != accentColor ||
+        oldDelegate.activePointIndex != activePointIndex;
+  }
+}
+
+class _ProfileView extends StatefulWidget {
+  const _ProfileView({
+    required this.isActive,
+    required this.displayName,
+    required this.email,
+    required this.employeeId,
+    required this.role,
+    required this.userId,
+    required this.accessToken,
+    this.profilePic,
+    this.onLogout,
+    this.loginBuilder,
+    this.onProfileChanged,
+  });
+
+  final bool isActive;
+  final String displayName;
+  final String email;
+  final String employeeId;
+  final UserRole role;
+  final int userId;
+  final String accessToken;
+  final String? profilePic;
+  final Future<void> Function()? onLogout;
+  final WidgetBuilder? loginBuilder;
+  final Future<void> Function({
+    required String displayName,
+    required String email,
+    required String employeeId,
+    required UserRole role,
+    String? profilePic,
+  })?
+  onProfileChanged;
+
+  @override
+  State<_ProfileView> createState() => _ProfileViewState();
+}
+
+class _ProfileViewState extends State<_ProfileView> {
+  static const _notificationKey = 'profile_notifications_enabled';
+  static const _storage = FlutterSecureStorage();
+  final _authApi = AuthApi();
+  final _imagePicker = ImagePicker();
+  late final TextEditingController _nameController = TextEditingController(
+    text: widget.displayName,
+  );
+
+  bool _notificationsEnabled = true;
+  bool _isLoggingOut = false;
+  bool _isEditing = false;
+  bool _isRefreshing = false;
+  bool _isSaving = false;
+  String? _draftProfilePic;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationSetting();
+    if (widget.isActive) {
+      _refreshProfile();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfileView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_isEditing && widget.displayName != oldWidget.displayName) {
+      _nameController.text = widget.displayName;
+    }
+    if (widget.isActive && !oldWidget.isActive) {
+      _refreshProfile();
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadNotificationSetting() async {
+    try {
+      final value = await _storage.read(key: _notificationKey);
+      if (!mounted || value == null) {
+        return;
+      }
+      setState(() => _notificationsEnabled = value != 'false');
+    } on Object {
+      // Keep notification enabled by default if local storage is unavailable.
+    }
+  }
+
+  Future<void> _setNotificationSetting(bool value) async {
+    setState(() => _notificationsEnabled = value);
+    try {
+      await _storage.write(key: _notificationKey, value: value.toString());
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save notification setting.')),
+      );
+    }
+  }
+
+  Future<void> _refreshProfile() async {
+    if (_isRefreshing || widget.accessToken.isEmpty) {
+      return;
+    }
+
+    setState(() => _isRefreshing = true);
+    try {
+      final user = await _authApi.getUser(
+        userId: widget.userId,
+        accessToken: widget.accessToken,
+      );
+      await _applyUser(user);
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
+  }
+
+  Future<void> _applyUser(Map<String, dynamic> user) async {
+    final displayName = user['name']?.toString() ?? widget.displayName;
+    final email = user['email']?.toString() ?? widget.email;
+    final employeeId =
+        user['employee_id']?.toString() ??
+        user['employeeId']?.toString() ??
+        widget.employeeId;
+    final profilePic =
+        user['profile_pic']?.toString() ??
+        user['profilePic']?.toString() ??
+        widget.profilePic;
+    final role = userRoleFromValue(user['role'] ?? widget.role.name);
+
+    await widget.onProfileChanged?.call(
+      displayName: displayName,
+      email: email,
+      employeeId: employeeId,
+      role: role,
+      profilePic: profilePic,
+    );
+
+    if (!mounted || _isEditing) {
+      return;
+    }
+    _nameController.text = displayName;
+  }
+
+  Future<void> _pickProfileImage() async {
+    final pickedImage = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 72,
+      maxWidth: 600,
+      maxHeight: 600,
+    );
+    if (pickedImage == null) {
+      return;
+    }
+
+    final bytes = await pickedImage.readAsBytes();
+    final extension = pickedImage.name.toLowerCase().endsWith('.png')
+        ? 'png'
+        : 'jpeg';
+    setState(() {
+      _draftProfilePic = 'data:image/$extension;base64,${base64Encode(bytes)}';
+    });
+  }
+
+  Future<void> _saveProfile() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Name cannot be empty.')));
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final user = await _authApi.updateUser(
+        userId: widget.userId,
+        accessToken: widget.accessToken,
+        name: name,
+        profilePic: _draftProfilePic,
+      );
+      await _applyUser(user);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isEditing = false;
+        _draftProfilePic = null;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile updated.')));
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  void _startEditing() {
+    setState(() {
+      _isEditing = true;
+      _draftProfilePic = widget.profilePic;
+      _nameController.text = widget.displayName;
+    });
+  }
+
+  void _cancelEditing() {
+    setState(() {
+      _isEditing = false;
+      _draftProfilePic = null;
+      _nameController.text = widget.displayName;
+    });
+  }
+
+  Future<void> _logout() async {
+    if (_isLoggingOut) {
+      return;
+    }
+
+    setState(() => _isLoggingOut = true);
+    try {
+      await widget.onLogout?.call();
+      if (!mounted) {
+        return;
+      }
+      final loginBuilder = widget.loginBuilder;
+      if (loginBuilder == null) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        return;
+      }
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: loginBuilder),
+        (route) => false,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoggingOut = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(28, 24, 28, 36),
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: IconButton(
+            onPressed: _isSaving
+                ? null
+                : (_isEditing ? _cancelEditing : _startEditing),
+            tooltip: _isEditing ? 'Cancel edit' : 'Edit profile',
+            icon: Icon(_isEditing ? Icons.close_rounded : Icons.edit_rounded),
+            color: Colors.white,
+            iconSize: 24,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Center(
+          child: _ProfileAvatar(
+            displayName: widget.displayName,
+            profilePic: _isEditing ? _draftProfilePic : widget.profilePic,
+            isEditing: _isEditing,
+            onPickImage: _pickProfileImage,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _ProfileField(
+          label: 'Name',
+          value: widget.displayName,
+          controller: _nameController,
+          isEditable: _isEditing,
+        ),
+        const SizedBox(height: 10),
+        _ProfileField(label: 'Email', value: widget.email),
+        const SizedBox(height: 10),
+        _ProfileField(
+          label: 'Employee ID',
+          value: widget.employeeId.isEmpty ? '-' : widget.employeeId,
+        ),
+        const SizedBox(height: 22),
+        _ProfileRoleRow(role: widget.role),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Notification',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            Switch(
+              value: _notificationsEnabled,
+              onChanged: _setNotificationSetting,
+              activeThumbColor: Colors.white,
+              activeTrackColor: const Color(0xFF8EDCFF),
+              inactiveThumbColor: Colors.white,
+              inactiveTrackColor: const Color(0xFF7A7A7A),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ],
+        ),
+        if (_isEditing) ...[
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _isSaving ? null : _cancelEditing,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white, width: 1.5),
+                    minimumSize: const Size.fromHeight(46),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _isSaving ? null : _saveProfile,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF1796D2),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(46),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(_isSaving ? 'Saving...' : 'Save'),
+                ),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 28),
+        FilledButton(
+          onPressed: _isLoggingOut ? null : _logout,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(46),
+            backgroundColor: const Color(0xFFD94343),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: Text(
+            _isLoggingOut ? 'Logging out...' : 'Logout',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+        if (_isRefreshing)
+          const Padding(
+            padding: EdgeInsets.only(top: 14),
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  color: Color(0xFF8EDCFF),
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({
+    required this.displayName,
+    required this.profilePic,
+    required this.isEditing,
+    required this.onPickImage,
+  });
+
+  final String displayName;
+  final String? profilePic;
+  final bool isEditing;
+  final VoidCallback onPickImage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        CircleAvatar(
+          radius: 74,
+          backgroundColor: const Color(0xFFD9D9D9),
+          backgroundImage: _imageProvider(profilePic),
+          child: _imageProvider(profilePic) == null
+              ? Text(
+                  _initialsFor(displayName),
+                  style: const TextStyle(
+                    color: Color(0xFF8F8F8F),
+                    fontSize: 36,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                )
+              : null,
+        ),
+        if (isEditing)
+          Positioned(
+            right: 6,
+            bottom: 8,
+            child: IconButton.filled(
+              onPressed: onPickImage,
+              tooltip: 'Upload profile picture',
+              icon: const Icon(Icons.camera_alt_rounded),
+              style: IconButton.styleFrom(
+                backgroundColor: const Color(0xFF1796D2),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  ImageProvider? _imageProvider(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    if (value.startsWith('data:image/')) {
+      final commaIndex = value.indexOf(',');
+      if (commaIndex == -1) {
+        return null;
+      }
+      return MemoryImage(base64Decode(value.substring(commaIndex + 1)));
+    }
+    return NetworkImage(value);
+  }
+
+  String _initialsFor(String name) {
+    final words = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    if (words.isEmpty) {
+      return 'U';
+    }
+    if (words.length == 1) {
+      return words.first.characters.take(2).toString().toUpperCase();
+    }
+    return '${words.first.characters.first}${words.last.characters.first}'
+        .toUpperCase();
+  }
+}
+
+class _ProfileField extends StatelessWidget {
+  const _ProfileField({
+    required this.label,
+    required this.value,
+    this.controller,
+    this.isEditable = false,
+  });
+
+  final String label;
+  final String value;
+  final TextEditingController? controller;
+  final bool isEditable;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+            letterSpacing: 0,
+          ),
+        ),
+        const SizedBox(height: 3),
+        SizedBox(
+          height: 40,
+          child: isEditable
+              ? TextField(
+                  controller: controller,
+                  textInputAction: TextInputAction.done,
+                  style: const TextStyle(color: Color(0xFF202020)),
+                  decoration: const InputDecoration(
+                    filled: true,
+                    fillColor: Color(0xFFD9D9D9),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                      borderSide: BorderSide(color: Colors.white, width: 1.5),
+                    ),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                )
+              : Container(
+                  width: double.infinity,
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD9D9D9),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF202020),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileRoleRow extends StatelessWidget {
+  const _ProfileRoleRow({required this.role});
+
+  final UserRole role;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(
+          child: Text(
+            'Role',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+        Container(
+          constraints: const BoxConstraints(minWidth: 72),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFF97DBFF),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            _roleLabel(role),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF078DFF),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _roleLabel(UserRole role) {
+    return switch (role) {
+      UserRole.operator => 'Operator',
+      UserRole.qc => 'QC',
+      UserRole.admin => 'Admin',
+    };
   }
 }
 

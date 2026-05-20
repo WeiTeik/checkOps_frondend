@@ -17,16 +17,20 @@ class CheckOpsBottomNav extends StatelessWidget {
     final items = isAdmin
         ? const [
             BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_rounded),
-              label: 'Home',
+              icon: Icon(Icons.show_chart_rounded),
+              label: 'Overview',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.groups_rounded),
               label: 'Users',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.analytics_rounded),
-              label: 'Reports',
+              icon: Icon(Icons.check_box_outlined),
+              label: 'Tasks',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.history_rounded),
+              label: 'History',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.person_rounded),
@@ -48,17 +52,22 @@ class CheckOpsBottomNav extends StatelessWidget {
             ),
           ];
 
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      onTap: onChanged,
-      type: BottomNavigationBarType.fixed,
-      backgroundColor: const Color(0xFF474747),
-      selectedItemColor: Colors.white,
-      unselectedItemColor: const Color(0xFFC7C7C7),
-      selectedLabelStyle: const TextStyle(fontSize: 11, letterSpacing: 0),
-      unselectedLabelStyle: const TextStyle(fontSize: 11, letterSpacing: 0),
-      iconSize: 25,
-      items: items,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Color(0xFF8A8A8A), width: 1)),
+      ),
+      child: BottomNavigationBar(
+        currentIndex: currentIndex,
+        onTap: onChanged,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFF474747),
+        selectedItemColor: Colors.white,
+        unselectedItemColor: const Color(0xFFC7C7C7),
+        selectedLabelStyle: const TextStyle(fontSize: 11, letterSpacing: 0),
+        unselectedLabelStyle: const TextStyle(fontSize: 11, letterSpacing: 0),
+        iconSize: isAdmin ? 22 : 25,
+        items: items,
+      ),
     );
   }
 }

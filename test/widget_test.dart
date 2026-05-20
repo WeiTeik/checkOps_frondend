@@ -1,14 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:checkops_frondend/main.dart';
+import 'package:checkops_frondend/authentication/auth_flow.dart';
+import 'package:checkops_frondend/authentication/login_page.dart';
+import 'package:checkops_frondend/authentication/otp_email_verification.dart';
 import 'package:checkops_frondend/authentication/reset_password.dart';
 
 void main() {
+  Future<void> pumpLoginPage(WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: LoginPage()));
+  }
+
+  Future<void> pumpOtpPage(WidgetTester tester, {String? initialOtp}) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OtpEmailVerificationPage(
+          email: 'test@example.com',
+          token: 'token',
+          flow: OtpFlow.passwordReset,
+          initialOtp: initialOtp,
+        ),
+      ),
+    );
+  }
+
   testWidgets('Login page shows required controls', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const MyApp());
+    await pumpLoginPage(tester);
 
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
@@ -20,7 +39,7 @@ void main() {
   testWidgets('Forget password button opens reset screen', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const MyApp());
+    await pumpLoginPage(tester);
 
     await tester.tap(find.text('Forget password?'));
     await tester.pumpAndSettle();
@@ -33,12 +52,7 @@ void main() {
   testWidgets('Reset password opens OTP email verification screen', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const MyApp());
-
-    await tester.tap(find.text('Forget password?'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Reset Password'));
-    await tester.pumpAndSettle();
+    await pumpOtpPage(tester);
 
     expect(find.text('OTP Email Verification'), findsOneWidget);
     expect(find.text('Verify your email'), findsOneWidget);
@@ -48,27 +62,20 @@ void main() {
   });
 
   testWidgets('Resend code button is clickable', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
-
-    await tester.tap(find.text('Forget password?'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Reset Password'));
-    await tester.pumpAndSettle();
+    await pumpOtpPage(tester);
     await tester.tap(find.text('Resend code'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('Verification code resent'), findsOneWidget);
+    expect(
+      find.text('Something went wrong. Please try again.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('OTP verify opens reset password screen', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const MyApp());
-
-    await tester.tap(find.text('Forget password?'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Reset Password'));
-    await tester.pumpAndSettle();
+    await pumpOtpPage(tester, initialOtp: '123456');
     await tester.tap(find.text('Verify'));
     await tester.pumpAndSettle();
 

@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../general/home_page.dart';
 import 'auth_api.dart';
+import 'auth_session.dart';
 import 'forget_password.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, AuthSessionManager? sessionManager})
+    : _sessionManager = sessionManager;
+
+  final AuthSessionManager? _sessionManager;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -15,6 +19,8 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authApi = AuthApi();
+  late final AuthSessionManager _sessionManager =
+      widget._sessionManager ?? AuthSessionManager(authApi: _authApi);
   bool _rememberMe = false;
   bool _isLoading = false;
 
@@ -36,23 +42,36 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
     try {
       final response = await _authApi.login(email: email, password: password);
-      final user = response['user'] as Map<String, dynamic>?;
-      final name =
-          user?['name']?.toString() ?? response['name']?.toString() ?? email;
-      final role = userRoleFromValue(
-        user?['role'] ??
-            user?['user_role'] ??
-            user?['type'] ??
-            response['role'] ??
-            response['user_role'] ??
-            response['type'],
+      final session = AuthSession.fromLoginResponse(response);
+      if (session == null) {
+        throw AuthApiException(
+          'Login response did not include a valid session.',
+        );
+      }
+
+      await _sessionManager.saveAfterLogin(
+        session: session,
+        rememberMe: _rememberMe,
       );
+
       if (!mounted) {
         return;
       }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => HomePage(role: role, displayName: name),
+          builder: (context) => HomePage(
+            role: session.role,
+            displayName: session.displayName,
+            email: session.email,
+            employeeId: session.employeeId,
+            userId: session.userId,
+            accessToken: session.accessToken,
+            profilePic: session.profilePic,
+            onLogout: _sessionManager.logout,
+            loginBuilder: (context) =>
+                LoginPage(sessionManager: _sessionManager),
+            onProfileUpdated: _sessionManager.updateCachedProfile,
+          ),
         ),
       );
     } on AuthApiException catch (error) {

@@ -30,6 +30,46 @@ class AuthApi {
     return _post('/auth/login', {'email': email, 'password': password});
   }
 
+  Future<Map<String, dynamic>> refresh({required String refreshToken}) {
+    return _post('/auth/refresh', {'refresh_token': refreshToken});
+  }
+
+  Future<String> logout({required String accessToken}) async {
+    final body = await _post(
+      '/auth/logout',
+      const <String, dynamic>{},
+      bearerToken: accessToken,
+    );
+    return _messageFrom(body);
+  }
+
+  Future<Map<String, dynamic>> getUser({
+    required int userId,
+    required String accessToken,
+  }) async {
+    final body = await _request(
+      method: 'GET',
+      path: '/users/$userId',
+      bearerToken: accessToken,
+    );
+    return _userFrom(body);
+  }
+
+  Future<Map<String, dynamic>> updateUser({
+    required int userId,
+    required String accessToken,
+    required String name,
+    String? profilePic,
+  }) async {
+    final body = await _request(
+      method: 'PATCH',
+      path: '/users/$userId',
+      payload: {'name': name, 'profile_pic': ?profilePic},
+      bearerToken: accessToken,
+    );
+    return _userFrom(body);
+  }
+
   Future<String> requestPasswordReset(String email) async {
     final body = await _post('/auth/password/request-reset', {'email': email});
     return _messageFrom(body);
@@ -89,11 +129,34 @@ class AuthApi {
 
   Future<Map<String, dynamic>> _post(
     String path,
-    Map<String, dynamic> payload,
-  ) async {
-    final request = await _client.postUrl(Uri.parse('$baseUrl$path'));
+    Map<String, dynamic> payload, {
+    String? bearerToken,
+  }) async {
+    return _request(
+      method: 'POST',
+      path: path,
+      payload: payload,
+      bearerToken: bearerToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> _request({
+    required String method,
+    required String path,
+    Map<String, dynamic> payload = const <String, dynamic>{},
+    String? bearerToken,
+  }) async {
+    final request = await _client.openUrl(method, Uri.parse('$baseUrl$path'));
     request.headers.contentType = ContentType.json;
-    request.write(jsonEncode(payload));
+    if (bearerToken != null && bearerToken.isNotEmpty) {
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer $bearerToken',
+      );
+    }
+    if (method != 'GET') {
+      request.write(jsonEncode(payload));
+    }
 
     final response = await request.close();
     final rawBody = await response.transform(utf8.decoder).join();
@@ -107,6 +170,14 @@ class AuthApi {
       return decoded;
     }
 
+    return <String, dynamic>{};
+  }
+
+  Map<String, dynamic> _userFrom(Map<String, dynamic> body) {
+    final user = body['user'];
+    if (user is Map<String, dynamic>) {
+      return user;
+    }
     return <String, dynamic>{};
   }
 

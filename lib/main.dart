@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'app_config.dart';
 import 'authentication/auth_api.dart';
 import 'authentication/auth_flow.dart';
+import 'authentication/auth_session.dart';
 import 'authentication/deep_link_service.dart';
 import 'authentication/expired_auth_link_page.dart';
 import 'authentication/login_page.dart';
 import 'authentication/otp_email_verification.dart';
+import 'general/home_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +26,9 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _authApi = AuthApi();
+  late final AuthSessionManager _sessionManager = AuthSessionManager(
+    authApi: _authApi,
+  );
 
   @override
   void initState() {
@@ -101,7 +106,56 @@ class _MyAppState extends State<MyApp> {
         scaffoldBackgroundColor: const Color(0xFF474747),
         useMaterial3: true,
       ),
-      home: const LoginPage(),
+      home: _AuthGate(sessionManager: _sessionManager),
+    );
+  }
+}
+
+class _AuthGate extends StatefulWidget {
+  const _AuthGate({required this.sessionManager});
+
+  final AuthSessionManager sessionManager;
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  late final Future<AuthSession?> _restoreSession = widget.sessionManager
+      .restore();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<AuthSession?>(
+      future: _restoreSession,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFF8EDCFF)),
+            ),
+          );
+        }
+
+        final session = snapshot.data;
+        if (session != null) {
+          return HomePage(
+            role: session.role,
+            displayName: session.displayName,
+            email: session.email,
+            employeeId: session.employeeId,
+            userId: session.userId,
+            accessToken: session.accessToken,
+            profilePic: session.profilePic,
+            onLogout: widget.sessionManager.logout,
+            loginBuilder: (context) =>
+                LoginPage(sessionManager: widget.sessionManager),
+            onProfileUpdated: widget.sessionManager.updateCachedProfile,
+          );
+        }
+
+        return LoginPage(sessionManager: widget.sessionManager);
+      },
     );
   }
 }
