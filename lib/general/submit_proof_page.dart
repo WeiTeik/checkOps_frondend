@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -101,8 +102,96 @@ class _SubmitProofPageState extends State<SubmitProofPage> {
     }
   }
 
+  Future<void> _confirmRemoveEvidence(_ProofEvidence evidence) async {
+    final shouldRemove = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return CupertinoTheme(
+          data: const CupertinoThemeData(
+            brightness: Brightness.dark,
+            primaryColor: CupertinoColors.systemBlue,
+          ),
+          child: CupertinoAlertDialog(
+            title: const Text('Delete picture?'),
+            content: const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Are you sure you want to remove this uploaded picture?',
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (shouldRemove != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _evidence.remove(evidence);
+    });
+  }
+
+  Future<void> _viewEvidence(_ProofEvidence evidence) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: const Color(0xFF1F1F1F),
+          insetPadding: const EdgeInsets.all(18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  tooltip: 'Close',
+                  icon: const Icon(Icons.close_rounded),
+                  color: Colors.white,
+                ),
+              ),
+              Flexible(
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.memory(
+                        evidence.bytes,
+                        fit: BoxFit.contain,
+                        semanticLabel: evidence.name,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _submitProof() {
-    if (_evidence.isEmpty) {
+    if (_evidence.isEmpty || _status == null) {
       return;
     }
 
@@ -115,6 +204,7 @@ class _SubmitProofPageState extends State<SubmitProofPage> {
   @override
   Widget build(BuildContext context) {
     final hasEvidence = _evidence.isNotEmpty;
+    final canSubmit = hasEvidence && _status != null;
 
     return Column(
       children: [
@@ -165,7 +255,11 @@ class _SubmitProofPageState extends State<SubmitProofPage> {
                       runSpacing: 12,
                       children: [
                         for (final evidence in _evidence)
-                          _EvidenceThumbnail(evidence: evidence),
+                          _EvidenceThumbnail(
+                            evidence: evidence,
+                            onTap: () => _viewEvidence(evidence),
+                            onRemove: () => _confirmRemoveEvidence(evidence),
+                          ),
                         _AddEvidenceButton(onTap: _chooseEvidenceSource),
                       ],
                     ),
@@ -260,12 +354,12 @@ class _SubmitProofPageState extends State<SubmitProofPage> {
                       width: double.infinity,
                       height: 48,
                       child: OutlinedButton(
-                        onPressed: hasEvidence ? _submitProof : null,
+                        onPressed: canSubmit ? _submitProof : null,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           disabledForegroundColor: const Color(0xFF8E8E8E),
                           side: BorderSide(
-                            color: hasEvidence
+                            color: canSubmit
                                 ? const Color(0xFFC7C7C7)
                                 : const Color(0xFF777777),
                             width: 1.5,
@@ -461,20 +555,67 @@ class _AddEvidenceButton extends StatelessWidget {
 }
 
 class _EvidenceThumbnail extends StatelessWidget {
-  const _EvidenceThumbnail({required this.evidence});
+  const _EvidenceThumbnail({
+    required this.evidence,
+    required this.onTap,
+    required this.onRemove,
+  });
 
   final _ProofEvidence evidence;
+  final VoidCallback onTap;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.memory(
-        evidence.bytes,
-        width: 50,
-        height: 50,
-        fit: BoxFit.cover,
-        semanticLabel: evidence.name,
+    return SizedBox(
+      width: 58,
+      height: 58,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.memory(
+                    evidence.bytes,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                    semanticLabel: evidence.name,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: Material(
+              color: const Color(0xFF1F1F1F),
+              shape: const CircleBorder(),
+              child: InkWell(
+                onTap: onRemove,
+                customBorder: const CircleBorder(),
+                child: const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
