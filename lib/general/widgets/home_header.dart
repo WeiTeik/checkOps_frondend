@@ -7,6 +7,9 @@ class _HomeHeader extends StatelessWidget {
     required this.displayName,
     required this.profilePic,
     required this.showAccountActions,
+    this.onBack,
+    this.onTaskEdit,
+    this.onTaskDelete,
   });
 
   final String title;
@@ -14,10 +17,14 @@ class _HomeHeader extends StatelessWidget {
   final String displayName;
   final String? profilePic;
   final bool showAccountActions;
+  final VoidCallback? onBack;
+  final VoidCallback? onTaskEdit;
+  final VoidCallback? onTaskDelete;
 
   @override
   Widget build(BuildContext context) {
     final initials = _initialsFor(displayName);
+    final showTaskActions = onTaskEdit != null || onTaskDelete != null;
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -27,12 +34,23 @@ class _HomeHeader extends StatelessWidget {
       child: SizedBox(
         height: 68,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 10, 16, 10),
+          padding: EdgeInsets.fromLTRB(onBack == null ? 18 : 0, 10, 8, 10),
           child: Row(
             children: [
+              if (onBack != null)
+                IconButton(
+                  onPressed: onBack,
+                  tooltip: 'Back',
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  color: Colors.white,
+                  iconSize: 32,
+                ),
               Expanded(
                 child: Text(
                   title,
+                  textAlign: onBack == null
+                      ? TextAlign.start
+                      : TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -43,6 +61,41 @@ class _HomeHeader extends StatelessWidget {
                   ),
                 ),
               ),
+              if (showTaskActions)
+                PopupMenuButton<String>(
+                  tooltip: 'Task actions',
+                  color: const Color(0xFF303030),
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(
+                    Icons.more_horiz_rounded,
+                    color: Colors.white,
+                  ),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      onTaskEdit?.call();
+                      return;
+                    }
+                    onTaskDelete?.call();
+                  },
+                  itemBuilder: (context) {
+                    return const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Text(
+                          'Edit',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ];
+                  },
+                ),
               if (showAccountActions) ...[
                 _RoleChip(role: role),
                 const SizedBox(width: 10),

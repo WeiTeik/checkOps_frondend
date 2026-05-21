@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../authentication/auth_api.dart';
+import '../authentication/task_api.dart';
 import '../authentication/user_api.dart';
 import 'checkops_bottom_nav.dart';
 import 'create_task_page.dart';
@@ -89,15 +90,25 @@ class _HomePageState extends State<HomePage> {
   late String _employeeId = widget.employeeId;
   late UserRole _role = widget.role;
   late String? _profilePic = widget.profilePic;
-  _Task? _selectedTask;
-  _Task? _reviewTask;
+  _TaskEntry? _selectedTaskEntry;
+  _TaskEntry? _reviewTaskEntry;
+  _Task? _taskDetailTask;
   bool _showCreateTask = false;
+  int _taskRefreshRevision = 0;
 
   bool get _isAdmin => _role == UserRole.admin;
 
   bool get _isProfileTab => _selectedIndex == (_isAdmin ? 4 : 2);
 
+  bool get _isTaskTab => _selectedIndex == (_isAdmin ? 2 : 0);
+
+  bool get _showTaskDetailHeader => _isTaskTab && _taskDetailTask != null;
+
   String get _headerTitle {
+    if (_showTaskDetailHeader) {
+      return 'Task Detail';
+    }
+
     if (_isAdmin) {
       return switch (_selectedIndex) {
         0 => 'Dashboard',
@@ -118,9 +129,9 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final showSubmitProof =
-        !_isAdmin && _selectedIndex == 0 && _selectedTask != null;
+        !_isAdmin && _selectedIndex == 0 && _selectedTaskEntry != null;
     final showReviewSubmission =
-        _reviewTask != null &&
+        _reviewTaskEntry != null &&
         (_isAdmin ? _selectedIndex == 2 : _selectedIndex == 0);
     final showCreateTask =
         _showCreateTask &&
@@ -132,22 +143,31 @@ class _HomePageState extends State<HomePage> {
         bottom: false,
         child: showCreateTask
             ? CreateTaskPage(
+                accessToken: widget.accessToken,
+                currentUserId: widget.userId,
+                currentUserRole: _role.name,
                 onBack: () => setState(() => _showCreateTask = false),
+                onTaskCreated: () => setState(() {
+                  _taskRefreshRevision++;
+                  _showCreateTask = false;
+                }),
               )
             : showReviewSubmission
             ? ReviewSubmissionPage(
-                taskTitle: _reviewTask!.title,
-                submittedTimeLabel: _reviewTask!.timeLabel,
+                taskTitle: _reviewTaskEntry!.task.title,
+                submittedTimeLabel: _reviewTaskEntry!.submittedTimeLabel,
                 showOperatorDetails: _role != UserRole.operator,
                 showQcFeedback: _role != UserRole.operator,
                 showReviewActions: _role != UserRole.operator,
-                onBack: () => setState(() => _reviewTask = null),
+                operatorRemarks: _reviewTaskEntry!.submissionRemark,
+                qcFeedback: _reviewTaskEntry!.reviewRemark,
+                onBack: () => setState(() => _reviewTaskEntry = null),
               )
             : showSubmitProof
             ? SubmitProofPage(
-                taskTitle: _selectedTask!.title,
-                taskTimeLabel: _selectedTask!.timeLabel,
-                onBack: () => setState(() => _selectedTask = null),
+                taskTitle: _selectedTaskEntry!.task.title,
+                taskTimeLabel: _selectedTaskEntry!.timeLabel,
+                onBack: () => setState(() => _selectedTaskEntry = null),
               )
             : Column(
                 children: [
@@ -156,7 +176,17 @@ class _HomePageState extends State<HomePage> {
                     role: _role,
                     displayName: _displayName,
                     profilePic: _profilePic,
-                    showAccountActions: !_isProfileTab,
+                    showAccountActions:
+                        !_isProfileTab && !_showTaskDetailHeader,
+                    onBack: _showTaskDetailHeader
+                        ? () => setState(() => _taskDetailTask = null)
+                        : null,
+                    onTaskEdit: _showTaskDetailHeader
+                        ? () => _showTaskAction('Edit')
+                        : null,
+                    onTaskDelete: _showTaskDetailHeader
+                        ? () => _showTaskAction('Delete')
+                        : null,
                   ),
                   Expanded(
                     child: IndexedStack(
@@ -170,12 +200,19 @@ class _HomePageState extends State<HomePage> {
                               ),
                               _TaskHomeView(
                                 role: _role,
+                                accessToken: widget.accessToken,
+                                refreshRevision: _taskRefreshRevision,
+                                selectedTask: _taskDetailTask,
+                                onTaskSelected: (task) =>
+                                    setState(() => _taskDetailTask = task),
+                                onTaskDetailBack: () =>
+                                    setState(() => _taskDetailTask = null),
                                 showSummary: false,
                                 sectionTitle: 'Tasks List',
                                 onAddTask: () =>
                                     setState(() => _showCreateTask = true),
-                                onCompletedTaskSelected: (task) =>
-                                    setState(() => _reviewTask = task),
+                                onCompletedTaskEntrySelected: (entry) =>
+                                    setState(() => _reviewTaskEntry = entry),
                               ),
                               const _PlaceholderView(
                                 icon: Icons.history_rounded,
@@ -198,18 +235,25 @@ class _HomePageState extends State<HomePage> {
                           : [
                               _TaskHomeView(
                                 role: _role,
-                                onAddTask: _role == UserRole.operator
-                                    ? null
-                                    : () => setState(
-                                        () => _showCreateTask = true,
-                                      ),
-                                onPendingTaskSelected:
-                                    _role == UserRole.operator
-                                    ? (task) =>
-                                          setState(() => _selectedTask = task)
+                                accessToken: widget.accessToken,
+                                refreshRevision: _taskRefreshRevision,
+                                selectedTask: _taskDetailTask,
+                                onTaskSelected: (task) =>
+                                    setState(() => _taskDetailTask = task),
+                                onTaskDetailBack: () =>
+                                    setState(() => _taskDetailTask = null),
+                                onAddTask: _role == UserRole.qc
+                                    ? () =>
+                                          setState(() => _showCreateTask = true)
                                     : null,
-                                onCompletedTaskSelected: (task) =>
-                                    setState(() => _reviewTask = task),
+                                onPendingTaskEntrySelected:
+                                    _role == UserRole.operator
+                                    ? (entry) => setState(
+                                        () => _selectedTaskEntry = entry,
+                                      )
+                                    : null,
+                                onCompletedTaskEntrySelected: (entry) =>
+                                    setState(() => _reviewTaskEntry = entry),
                               ),
                               const _PlaceholderView(
                                 icon: Icons.history_rounded,
@@ -238,8 +282,9 @@ class _HomePageState extends State<HomePage> {
         isAdmin: _isAdmin,
         currentIndex: _selectedIndex,
         onChanged: (index) => setState(() {
-          _selectedTask = null;
-          _reviewTask = null;
+          _selectedTaskEntry = null;
+          _reviewTaskEntry = null;
+          _taskDetailTask = null;
           _showCreateTask = false;
           _selectedIndex = index;
         }),
@@ -268,6 +313,12 @@ class _HomePageState extends State<HomePage> {
       role: role,
       profilePic: profilePic,
     );
+  }
+
+  void _showTaskAction(String action) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$action task selected.')));
   }
 }
 
