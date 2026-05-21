@@ -3,6 +3,7 @@ part of '../home_page.dart';
 class _TaskHomeView extends StatefulWidget {
   const _TaskHomeView({
     required this.role,
+    this.onAddTask,
     this.onPendingTaskSelected,
     this.onCompletedTaskSelected,
     this.showSummary = true,
@@ -10,6 +11,7 @@ class _TaskHomeView extends StatefulWidget {
   });
 
   final UserRole role;
+  final VoidCallback? onAddTask;
   final ValueChanged<_Task>? onPendingTaskSelected;
   final ValueChanged<_Task>? onCompletedTaskSelected;
   final bool showSummary;
@@ -21,7 +23,10 @@ class _TaskHomeView extends StatefulWidget {
 
 class _TaskHomeViewState extends State<_TaskHomeView> {
   _TaskFilter _filter = const _TaskFilter();
+  bool _isAddButtonPressed = false;
   bool _isFilterButtonPressed = false;
+
+  bool get _canAddTask => widget.onAddTask != null;
 
   List<_Task> _filteredTasks(List<_Task> tasks) {
     final searchText = _filter.searchText.trim().toLowerCase();
@@ -83,6 +88,20 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
     }
   }
 
+  Future<void> _openAddTask() async {
+    if (!_canAddTask) {
+      return;
+    }
+
+    setState(() => _isAddButtonPressed = true);
+    await Future<void>.delayed(const Duration(milliseconds: 110));
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isAddButtonPressed = false);
+    widget.onAddTask?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final tasks = _filteredTasks(_tasksFor(widget.role));
@@ -124,6 +143,27 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
           child: Stack(
             alignment: Alignment.center,
             children: [
+              Positioned(
+                left: 18,
+                child: AnimatedScale(
+                  scale: _isAddButtonPressed ? 0.82 : 1,
+                  duration: const Duration(milliseconds: 110),
+                  curve: Curves.easeOut,
+                  child: AnimatedRotation(
+                    turns: _isAddButtonPressed ? 0.06 : 0,
+                    duration: const Duration(milliseconds: 140),
+                    curve: Curves.easeOut,
+                    child: IconButton(
+                      onPressed: _canAddTask ? _openAddTask : null,
+                      tooltip: 'Add task',
+                      icon: const Icon(Icons.add_rounded),
+                      color: Colors.white,
+                      disabledColor: const Color(0xFF777777),
+                      iconSize: 25,
+                    ),
+                  ),
+                ),
+              ),
               Center(
                 child: Text(
                   widget.sectionTitle,

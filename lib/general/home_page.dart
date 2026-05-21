@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../authentication/auth_api.dart';
 import '../authentication/user_api.dart';
 import 'checkops_bottom_nav.dart';
+import 'create_task_page.dart';
 import 'review_submission_page.dart';
 import 'submit_proof_page.dart';
 
@@ -90,6 +91,7 @@ class _HomePageState extends State<HomePage> {
   late String? _profilePic = widget.profilePic;
   _Task? _selectedTask;
   _Task? _reviewTask;
+  bool _showCreateTask = false;
 
   bool get _isAdmin => _role == UserRole.admin;
 
@@ -120,12 +122,19 @@ class _HomePageState extends State<HomePage> {
     final showReviewSubmission =
         _reviewTask != null &&
         (_isAdmin ? _selectedIndex == 2 : _selectedIndex == 0);
+    final showCreateTask =
+        _showCreateTask &&
+        (_isAdmin ? _selectedIndex == 2 : _selectedIndex == 0);
 
     return Scaffold(
       backgroundColor: const Color(0xFF474747),
       body: SafeArea(
         bottom: false,
-        child: showReviewSubmission
+        child: showCreateTask
+            ? CreateTaskPage(
+                onBack: () => setState(() => _showCreateTask = false),
+              )
+            : showReviewSubmission
             ? ReviewSubmissionPage(
                 taskTitle: _reviewTask!.title,
                 submittedTimeLabel: _reviewTask!.timeLabel,
@@ -163,6 +172,8 @@ class _HomePageState extends State<HomePage> {
                                 role: _role,
                                 showSummary: false,
                                 sectionTitle: 'Tasks List',
+                                onAddTask: () =>
+                                    setState(() => _showCreateTask = true),
                                 onCompletedTaskSelected: (task) =>
                                     setState(() => _reviewTask = task),
                               ),
@@ -187,6 +198,11 @@ class _HomePageState extends State<HomePage> {
                           : [
                               _TaskHomeView(
                                 role: _role,
+                                onAddTask: _role == UserRole.operator
+                                    ? null
+                                    : () => setState(
+                                        () => _showCreateTask = true,
+                                      ),
                                 onPendingTaskSelected:
                                     _role == UserRole.operator
                                     ? (task) =>
@@ -224,6 +240,7 @@ class _HomePageState extends State<HomePage> {
         onChanged: (index) => setState(() {
           _selectedTask = null;
           _reviewTask = null;
+          _showCreateTask = false;
           _selectedIndex = index;
         }),
       ),
