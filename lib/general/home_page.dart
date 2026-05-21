@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../authentication/auth_api.dart';
 import '../authentication/user_api.dart';
 import 'checkops_bottom_nav.dart';
+import 'review_submission_page.dart';
 import 'submit_proof_page.dart';
 
 part '../admin/admin_dashboard_view.dart';
@@ -88,6 +89,7 @@ class _HomePageState extends State<HomePage> {
   late UserRole _role = widget.role;
   late String? _profilePic = widget.profilePic;
   _Task? _selectedTask;
+  _Task? _reviewTask;
 
   bool get _isAdmin => _role == UserRole.admin;
 
@@ -115,12 +117,23 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final showSubmitProof =
         !_isAdmin && _selectedIndex == 0 && _selectedTask != null;
+    final showReviewSubmission =
+        _reviewTask != null &&
+        (_isAdmin ? _selectedIndex == 2 : _selectedIndex == 0);
 
     return Scaffold(
       backgroundColor: const Color(0xFF474747),
       body: SafeArea(
         bottom: false,
-        child: showSubmitProof
+        child: showReviewSubmission
+            ? ReviewSubmissionPage(
+                taskTitle: _reviewTask!.title,
+                submittedTimeLabel: _reviewTask!.timeLabel,
+                showOperatorDetails: _role != UserRole.operator,
+                showReviewActions: _role != UserRole.operator,
+                onBack: () => setState(() => _reviewTask = null),
+              )
+            : showSubmitProof
             ? SubmitProofPage(
                 taskTitle: _selectedTask!.title,
                 taskTimeLabel: _selectedTask!.timeLabel,
@@ -149,6 +162,8 @@ class _HomePageState extends State<HomePage> {
                                 role: _role,
                                 showSummary: false,
                                 sectionTitle: 'Tasks List',
+                                onCompletedTaskSelected: (task) =>
+                                    setState(() => _reviewTask = task),
                               ),
                               const _PlaceholderView(
                                 icon: Icons.history_rounded,
@@ -176,6 +191,8 @@ class _HomePageState extends State<HomePage> {
                                     ? (task) =>
                                           setState(() => _selectedTask = task)
                                     : null,
+                                onCompletedTaskSelected: (task) =>
+                                    setState(() => _reviewTask = task),
                               ),
                               const _PlaceholderView(
                                 icon: Icons.history_rounded,
@@ -205,6 +222,7 @@ class _HomePageState extends State<HomePage> {
         currentIndex: _selectedIndex,
         onChanged: (index) => setState(() {
           _selectedTask = null;
+          _reviewTask = null;
           _selectedIndex = index;
         }),
       ),

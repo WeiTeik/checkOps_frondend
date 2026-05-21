@@ -4,12 +4,14 @@ class _TaskHomeView extends StatefulWidget {
   const _TaskHomeView({
     required this.role,
     this.onPendingTaskSelected,
+    this.onCompletedTaskSelected,
     this.showSummary = true,
     this.sectionTitle = 'Tasks List',
   });
 
   final UserRole role;
   final ValueChanged<_Task>? onPendingTaskSelected;
+  final ValueChanged<_Task>? onCompletedTaskSelected;
   final bool showSummary;
   final String sectionTitle;
 
@@ -171,9 +173,17 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
                     final task = tasks[index];
                     return _TaskTile(
                       task: task,
-                      onTap: task.status == _TaskStatus.pending
-                          ? () => widget.onPendingTaskSelected?.call(task)
-                          : null,
+                      onTap: switch (task.status) {
+                        _TaskStatus.pending =>
+                          widget.onPendingTaskSelected == null
+                              ? null
+                              : () => widget.onPendingTaskSelected?.call(task),
+                        _TaskStatus.completed =>
+                          widget.onCompletedTaskSelected == null
+                              ? null
+                              : () =>
+                                    widget.onCompletedTaskSelected?.call(task),
+                      },
                     );
                   },
                 ),
@@ -837,4 +847,3 @@ List<_Task> _tasksFor(UserRole role) {
     ),
   ];
 }
-
