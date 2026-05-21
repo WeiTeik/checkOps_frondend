@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class ReviewSubmissionPage extends StatefulWidget {
@@ -14,6 +15,7 @@ class ReviewSubmissionPage extends StatefulWidget {
         'All pump operating normally. Water pressure stable at 4.2 bar. No visible leaks or corrosion found.',
     this.qcFeedback = '',
     this.showOperatorDetails = true,
+    this.showQcFeedback = true,
     this.showReviewActions = true,
   });
 
@@ -25,6 +27,7 @@ class ReviewSubmissionPage extends StatefulWidget {
   final String operatorRemarks;
   final String qcFeedback;
   final bool showOperatorDetails;
+  final bool showQcFeedback;
   final bool showReviewActions;
 
   @override
@@ -54,6 +57,50 @@ class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
       ),
     );
     widget.onBack();
+  }
+
+  Future<void> _confirmSubmitReview(bool accepted) async {
+    final actionLabel = accepted ? 'Accepted' : 'Rejected';
+    final shouldSubmit = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return CupertinoTheme(
+          data: const CupertinoThemeData(
+            brightness: Brightness.dark,
+            primaryColor: CupertinoColors.systemBlue,
+          ),
+          child: CupertinoAlertDialog(
+            title: Text('$actionLabel submission?'),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Are you sure you want to mark this submission as $actionLabel?',
+              ),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: !accepted,
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(
+                  actionLabel,
+                  style: accepted
+                      ? const TextStyle(color: Color(0xFF7CFF8A))
+                      : null,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (shouldSubmit == true) {
+      _submitReview(accepted);
+    }
   }
 
   @override
@@ -155,83 +202,90 @@ class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
                   ),
                 ),
               ),
-              const _ReviewSectionTitle(title: 'QC feedback (optional)'),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-                child: widget.showReviewActions
-                    ? Column(
-                        children: [
-                          TextField(
-                            controller: _feedbackController,
-                            minLines: 3,
-                            maxLines: 4,
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0,
-                            ),
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: const Color(0xFFD9D9D9),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide.none,
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF23A8FF),
-                                  width: 2,
-                                ),
-                              ),
-                              hintText: 'Add remarks...',
-                              hintStyle: const TextStyle(
+              if (widget.showQcFeedback) ...[
+                const _ReviewSectionTitle(title: 'QC feedback (optional)'),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+                  child: widget.showReviewActions
+                      ? Column(
+                          children: [
+                            TextField(
+                              controller: _feedbackController,
+                              minLines: 3,
+                              maxLines: 4,
+                              style: const TextStyle(
                                 color: Colors.black,
                                 fontSize: 15,
                                 fontWeight: FontWeight.w400,
                                 letterSpacing: 0,
                               ),
-                              contentPadding: const EdgeInsets.all(14),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: const Color(0xFFD9D9D9),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFF23A8FF),
+                                    width: 2,
+                                  ),
+                                ),
+                                hintText: 'Add remarks...',
+                                hintStyle: const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: 0,
+                                ),
+                                contentPadding: const EdgeInsets.all(14),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 22),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _ReviewDecisionButton(
-                                  label: 'Accepted',
-                                  backgroundColor: const Color(0xFFD9D9D9),
-                                  foregroundColor: Colors.black,
-                                  onPressed: () => _submitReview(true),
+                            const SizedBox(height: 22),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _ReviewDecisionButton(
+                                    label: 'Accepted',
+                                    icon: Icons.check_rounded,
+                                    backgroundColor: const Color(0xFFD9D9D9),
+                                    foregroundColor: Colors.black,
+                                    borderColor: const Color(0xFFD9D9D9),
+                                    onPressed: () => _confirmSubmitReview(true),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _ReviewDecisionButton(
-                                  label: 'Rejected',
-                                  backgroundColor: const Color(0xFFFF4048),
-                                  foregroundColor: Colors.black,
-                                  onPressed: () => _submitReview(false),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: _ReviewDecisionButton(
+                                    label: 'Rejected',
+                                    icon: Icons.close_rounded,
+                                    backgroundColor: const Color(0xFFFF4048),
+                                    foregroundColor: Colors.black,
+                                    borderColor: const Color(0xFFFF4048),
+                                    onPressed: () =>
+                                        _confirmSubmitReview(false),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
+                          ],
+                        )
+                      : Text(
+                          widget.qcFeedback.trim().isEmpty
+                              ? 'No remarks...'
+                              : widget.qcFeedback,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: 0,
+                            height: 1.25,
                           ),
-                        ],
-                      )
-                    : Text(
-                        widget.qcFeedback.trim().isEmpty
-                            ? 'No remarks...'
-                            : widget.qcFeedback,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w400,
-                          letterSpacing: 0,
-                          height: 1.25,
                         ),
-                      ),
-              ),
+                ),
+              ],
             ],
           ),
         ),
@@ -390,33 +444,41 @@ class _EvidencePreviewTile extends StatelessWidget {
 class _ReviewDecisionButton extends StatelessWidget {
   const _ReviewDecisionButton({
     required this.label,
+    required this.icon,
     required this.backgroundColor,
     required this.foregroundColor,
+    required this.borderColor,
     required this.onPressed,
   });
 
   final String label;
+  final IconData icon;
   final Color backgroundColor;
   final Color foregroundColor;
+  final Color borderColor;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 40,
-      child: FilledButton(
+      height: 50,
+      child: OutlinedButton.icon(
         onPressed: onPressed,
-        style: FilledButton.styleFrom(
+        icon: Icon(icon, size: 23),
+        label: Text(label, overflow: TextOverflow.ellipsis),
+        style: OutlinedButton.styleFrom(
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
-          shape: const RoundedRectangleBorder(),
+          side: BorderSide(color: borderColor, width: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           textStyle: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w400,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
             letterSpacing: 0,
           ),
         ),
-        child: Text(label, overflow: TextOverflow.ellipsis),
       ),
     );
   }

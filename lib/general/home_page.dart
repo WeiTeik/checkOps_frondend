@@ -130,6 +130,7 @@ class _HomePageState extends State<HomePage> {
                 taskTitle: _reviewTask!.title,
                 submittedTimeLabel: _reviewTask!.timeLabel,
                 showOperatorDetails: _role != UserRole.operator,
+                showQcFeedback: _role != UserRole.operator,
                 showReviewActions: _role != UserRole.operator,
                 onBack: () => setState(() => _reviewTask = null),
               )
