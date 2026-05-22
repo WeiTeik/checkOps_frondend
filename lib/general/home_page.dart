@@ -93,6 +93,7 @@ class _HomePageState extends State<HomePage> {
   _TaskEntry? _selectedTaskEntry;
   _TaskEntry? _reviewTaskEntry;
   _Task? _taskDetailTask;
+  _Task? _editingTask;
   bool _showCreateTask = false;
   int _taskRefreshRevision = 0;
 
@@ -114,14 +115,14 @@ class _HomePageState extends State<HomePage> {
         0 => 'Dashboard',
         1 => 'Users',
         2 => 'Tasks',
-        3 => 'History',
+        3 => 'Notification',
         _ => 'Profile',
       };
     }
 
     return switch (_selectedIndex) {
       0 => 'My Tasks',
-      1 => 'History',
+      1 => 'Notification',
       _ => 'Profile',
     };
   }
@@ -146,10 +147,29 @@ class _HomePageState extends State<HomePage> {
                 accessToken: widget.accessToken,
                 currentUserId: widget.userId,
                 currentUserRole: _role.name,
-                onBack: () => setState(() => _showCreateTask = false),
+                initialValues: _editingTask == null
+                    ? null
+                    : CreateTaskInitialValues(
+                        taskId: _editingTask!.id,
+                        title: _editingTask!.title,
+                        description: _editingTask!.description,
+                        userId: _editingTask!.userId,
+                        location: _editingTask!.location,
+                        recurrenceType: _editingTask!.recurrenceType,
+                        recurrenceStartAt: _editingTask!.recurrenceStartAt,
+                        dueInterval: _editingTask!.dueInterval,
+                        dueIntervalUnit: _editingTask!.dueIntervalUnit,
+                        isActive: _editingTask!.isActive,
+                      ),
+                onBack: () => setState(() {
+                  _showCreateTask = false;
+                  _editingTask = null;
+                }),
                 onTaskCreated: () => setState(() {
                   _taskRefreshRevision++;
                   _showCreateTask = false;
+                  _editingTask = null;
+                  _taskDetailTask = null;
                 }),
               )
             : showReviewSubmission
@@ -182,9 +202,12 @@ class _HomePageState extends State<HomePage> {
                         ? () => setState(() => _taskDetailTask = null)
                         : null,
                     onTaskEdit: _showTaskDetailHeader
-                        ? () => _showTaskAction('Edit')
+                        ? () => setState(() {
+                            _editingTask = _taskDetailTask;
+                            _showCreateTask = true;
+                          })
                         : null,
-                    onTaskDelete: _showTaskDetailHeader
+                    onTaskDelete: _showTaskDetailHeader && _isAdmin
                         ? () => _showTaskAction('Delete')
                         : null,
                   ),
@@ -209,14 +232,16 @@ class _HomePageState extends State<HomePage> {
                                     setState(() => _taskDetailTask = null),
                                 showSummary: false,
                                 sectionTitle: 'Tasks List',
-                                onAddTask: () =>
-                                    setState(() => _showCreateTask = true),
+                                onAddTask: () => setState(() {
+                                  _editingTask = null;
+                                  _showCreateTask = true;
+                                }),
                                 onCompletedTaskEntrySelected: (entry) =>
                                     setState(() => _reviewTaskEntry = entry),
                               ),
                               const _PlaceholderView(
-                                icon: Icons.history_rounded,
-                                title: 'History',
+                                icon: Icons.notifications_rounded,
+                                title: 'Notification',
                               ),
                               _ProfileView(
                                 isActive: _selectedIndex == 4,
@@ -243,8 +268,10 @@ class _HomePageState extends State<HomePage> {
                                 onTaskDetailBack: () =>
                                     setState(() => _taskDetailTask = null),
                                 onAddTask: _role == UserRole.qc
-                                    ? () =>
-                                          setState(() => _showCreateTask = true)
+                                    ? () => setState(() {
+                                        _editingTask = null;
+                                        _showCreateTask = true;
+                                      })
                                     : null,
                                 onPendingTaskEntrySelected:
                                     _role == UserRole.operator
@@ -256,8 +283,8 @@ class _HomePageState extends State<HomePage> {
                                     setState(() => _reviewTaskEntry = entry),
                               ),
                               const _PlaceholderView(
-                                icon: Icons.history_rounded,
-                                title: 'History',
+                                icon: Icons.notifications_rounded,
+                                title: 'Notification',
                               ),
                               _ProfileView(
                                 isActive: _selectedIndex == 2,
@@ -285,6 +312,7 @@ class _HomePageState extends State<HomePage> {
           _selectedTaskEntry = null;
           _reviewTaskEntry = null;
           _taskDetailTask = null;
+          _editingTask = null;
           _showCreateTask = false;
           _selectedIndex = index;
         }),

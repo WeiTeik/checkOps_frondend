@@ -43,6 +43,46 @@ class TaskApi {
     return <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> updateTask({
+    required int taskId,
+    required String accessToken,
+    required String name,
+    required String description,
+    required int userId,
+    required String location,
+    required String recurrenceType,
+    required int recurrenceInterval,
+    required String? recurrenceUnit,
+    required DateTime recurrenceStartAt,
+    required int dueInterval,
+    required String dueIntervalUnit,
+    required bool isActive,
+  }) async {
+    final body = await _authApi.request(
+      method: 'PUT',
+      path: '/tasks/$taskId',
+      payload: {
+        'name': name,
+        'description': description,
+        'user_id': userId,
+        'location': location,
+        'recurrence_type': recurrenceType,
+        'recurrence_interval': recurrenceInterval,
+        'recurrence_unit': recurrenceUnit,
+        'recurrence_start_at': recurrenceStartAt.toIso8601String(),
+        'due_interval': dueInterval,
+        'due_interval_unit': dueIntervalUnit,
+        'is_active': isActive,
+      },
+      bearerToken: accessToken,
+    );
+    final task = body['task'];
+    if (task is Map<String, dynamic>) {
+      return task;
+    }
+    return <String, dynamic>{};
+  }
+
   Future<List<Map<String, dynamic>>> getTasks({
     required String accessToken,
     String? search,
@@ -105,5 +145,30 @@ class TaskApi {
           .toList();
     }
     return const [];
+  }
+
+  Future<Map<String, dynamic>> createTaskEntry({
+    required int taskId,
+    required String accessToken,
+    required int userId,
+    required DateTime startAt,
+    required DateTime dueAt,
+  }) async {
+    final body = await _authApi.request(
+      method: 'POST',
+      path: '/tasks/$taskId/entries',
+      payload: {
+        'user_id': userId,
+        'start_at': startAt.toIso8601String(),
+        'due_at': dueAt.toIso8601String(),
+        'status': 'Pending',
+      },
+      bearerToken: accessToken,
+    );
+    final entry = body['entry'];
+    if (entry is Map<String, dynamic>) {
+      return entry;
+    }
+    return <String, dynamic>{};
   }
 }

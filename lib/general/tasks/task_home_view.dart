@@ -286,7 +286,12 @@ class _TaskEntryListView extends StatefulWidget {
 class _TaskEntryListViewState extends State<_TaskEntryListView> {
   final _taskApi = TaskApi();
   final _userApi = UserApi();
+  _TaskEntryFilter _entryFilter = const _TaskEntryFilter();
   Future<_TaskDetailData>? _detailFuture;
+  bool _isAddEntryButtonPressed = false;
+  bool _isEntryFilterButtonPressed = false;
+
+  bool get _canAddEntry => widget.role != UserRole.operator;
 
   @override
   void initState() {
@@ -324,6 +329,117 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
     setState(_loadDetail);
   }
 
+  List<_TaskEntry> _filteredEntries(List<_TaskEntry> entries) {
+    return entries.where((entry) {
+      final matchesStatus =
+          _entryFilter.statuses.isEmpty ||
+          _entryFilter.statuses.contains(entry.status);
+      final matchesStart =
+          _entryFilter.startDate == null ||
+          !entry.startAt.isBefore(_entryFilter.startDate!);
+      final matchesEnd =
+          _entryFilter.endDate == null ||
+          entry.dueAt.isBefore(
+            _entryFilter.endDate!.add(const Duration(days: 1)),
+          );
+
+      return matchesStatus && matchesStart && matchesEnd;
+    }).toList();
+  }
+
+  Future<void> _openAddEntry() async {
+    if (!_canAddEntry) {
+      return;
+    }
+
+    setState(() => _isAddEntryButtonPressed = true);
+    await Future<void>.delayed(const Duration(milliseconds: 110));
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isAddEntryButtonPressed = false);
+
+    final created = await showGeneralDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      barrierDismissible: false,
+      barrierLabel: 'Add task entry',
+      transitionDuration: const Duration(milliseconds: 260),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return _AddTaskEntryDialog(
+          taskId: widget.task.id,
+          accessToken: widget.accessToken,
+          defaultUserId: widget.task.userId,
+          taskStartAt: widget.task.recurrenceStartAt,
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return FadeTransition(
+          opacity: curvedAnimation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.06),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: child,
+          ),
+        );
+      },
+    );
+
+    if (created == true && mounted) {
+      _refreshDetail();
+    }
+  }
+
+  Future<void> _openEntryFilter() async {
+    setState(() => _isEntryFilterButtonPressed = true);
+    await Future<void>.delayed(const Duration(milliseconds: 110));
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isEntryFilterButtonPressed = false);
+
+    final nextFilter = await showGeneralDialog<_TaskEntryFilter>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      barrierDismissible: true,
+      barrierLabel: 'Close entry filter',
+      transitionDuration: const Duration(milliseconds: 260),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return _TaskEntryFilterDialog(initialFilter: _entryFilter);
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return FadeTransition(
+          opacity: curvedAnimation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.06),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: child,
+          ),
+        );
+      },
+    );
+
+    if (nextFilter != null) {
+      setState(() => _entryFilter = nextFilter);
+    }
+  }
+
   VoidCallback? _entryTap(_TaskEntry entry) {
     if (entry.status == _TaskStatus.pending) {
       if (widget.role == UserRole.operator && entry.isAvailableForSubmission) {
@@ -357,7 +473,7 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
               }
 
               final detail = snapshot.data;
-              final entries = detail?.entries ?? const [];
+              final entries = _filteredEntries(detail?.entries ?? const []);
               return RefreshIndicator(
                 onRefresh: () async {
                   _refreshDetail();
@@ -373,7 +489,14 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
                         assignedUserName: detail?.assignedUserName ?? '',
                       ),
                     ),
-                    const _TaskDetailSectionTitle(title: 'Task Entry'),
+                    _TaskListHeader(
+                      title: 'Task Entry',
+                      canAddTask: _canAddEntry,
+                      isAddButtonPressed: _isAddEntryButtonPressed,
+                      isFilterButtonPressed: _isEntryFilterButtonPressed,
+                      onAddTask: _openAddEntry,
+                      onFilter: _openEntryFilter,
+                    ),
                     if (entries.isEmpty)
                       const SizedBox(
                         height: 180,
@@ -497,30 +620,6 @@ class _TaskListHeader extends StatelessWidget {
   }
 }
 
-class _TaskDetailSectionTitle extends StatelessWidget {
-  const _TaskDetailSectionTitle({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 46,
-      alignment: Alignment.center,
-      color: const Color(0xFF303030),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 19,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0,
-        ),
-      ),
-    );
-  }
-}
-
 class _TaskDetailSummary extends StatelessWidget {
   const _TaskDetailSummary({
     required this.task,
@@ -543,39 +642,72 @@ class _TaskDetailSummary extends StatelessWidget {
               Expanded(
                 child: Text(
                   task.title,
-                  maxLines: 2,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: 22,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0,
+                    height: 1.15,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               _ActivePill(isActive: task.isActive),
             ],
           ),
-          const SizedBox(height: 18),
-          _TaskDetailInfoRow(label: 'Recurrence', value: task.recurrenceLabel),
-          const SizedBox(height: 10),
-          _TaskDetailInfoRow(
-            label: 'Assigned user',
-            value: assignedUserName.isEmpty ? 'Loading...' : assignedUserName,
+          const SizedBox(height: 20),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _TaskDetailInfoTile(
+                  icon: Icons.repeat_rounded,
+                  label: 'Recurrence',
+                  value: task.recurrenceLabel,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _TaskDetailInfoTile(
+                  icon: Icons.schedule_rounded,
+                  label: 'Start at',
+                  value: _formatDateTimeWithLineBreak(task.recurrenceStartAt),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          _TaskDetailInfoRow(
-            label: 'Start at',
-            value: _formatDateTime(task.recurrenceStartAt),
+          const SizedBox(height: 18),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _TaskDetailInfoTile(
+                  icon: Icons.person_rounded,
+                  label: 'Assigned user',
+                  value: assignedUserName.isEmpty
+                      ? 'Loading...'
+                      : assignedUserName,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _TaskDetailInfoTile(
+                  icon: Icons.place_rounded,
+                  label: 'Location',
+                  value: task.location.trim().isEmpty ? '-' : task.location,
+                ),
+              ),
+            ],
           ),
           if (task.description.trim().isNotEmpty) ...[
-            const SizedBox(height: 16),
-            _TaskDetailTextBlock(label: 'Description', value: task.description),
-          ],
-          if (task.location.trim().isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _TaskDetailTextBlock(label: 'Location', value: task.location),
+            const SizedBox(height: 20),
+            _TaskDetailTextBlock(
+              icon: Icons.notes_rounded,
+              label: 'Description',
+              value: task.description,
+            ),
           ],
         ],
       ),
@@ -583,9 +715,14 @@ class _TaskDetailSummary extends StatelessWidget {
   }
 }
 
-class _TaskDetailInfoRow extends StatelessWidget {
-  const _TaskDetailInfoRow({required this.label, required this.value});
+class _TaskDetailInfoTile extends StatelessWidget {
+  const _TaskDetailInfoTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
+  final IconData icon;
   final String label;
   final String value;
 
@@ -594,27 +731,42 @@ class _TaskDetailInfoRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 112,
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFFC7C7C7),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
-            ),
+        Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF303030),
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: Icon(icon, color: const Color(0xFFC7C7C7), size: 18),
         ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0,
-            ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFFC7C7C7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0,
+                  height: 1.3,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -623,34 +775,57 @@ class _TaskDetailInfoRow extends StatelessWidget {
 }
 
 class _TaskDetailTextBlock extends StatelessWidget {
-  const _TaskDetailTextBlock({required this.label, required this.value});
+  const _TaskDetailTextBlock({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
+  final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFFC7C7C7),
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0,
+        Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFF303030),
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: Icon(icon, color: const Color(0xFFC7C7C7), size: 18),
         ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            height: 1.25,
-            letterSpacing: 0,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFFC7C7C7),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  height: 1.3,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -858,6 +1033,800 @@ class _TaskFilterDialogState extends State<_TaskFilterDialog> {
       return '';
     }
     return '${date.day}/${date.month}/${date.year}';
+  }
+}
+
+class _TaskEntryFilterDialog extends StatefulWidget {
+  const _TaskEntryFilterDialog({required this.initialFilter});
+
+  final _TaskEntryFilter initialFilter;
+
+  @override
+  State<_TaskEntryFilterDialog> createState() => _TaskEntryFilterDialogState();
+}
+
+class _TaskEntryFilterDialogState extends State<_TaskEntryFilterDialog> {
+  late final Set<_TaskStatus> _statuses = {...widget.initialFilter.statuses};
+  late DateTime? _startDate = widget.initialFilter.startDate;
+  late DateTime? _endDate = widget.initialFilter.endDate;
+
+  Future<void> _pickDate({required bool isStartDate}) async {
+    final initialDate = (isStartDate ? _startDate : _endDate) ?? DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF97DBFF),
+              onPrimary: Color(0xFF303030),
+              surface: Color(0xFF474747),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate == null) {
+      return;
+    }
+
+    setState(() {
+      final value = DateTime(pickedDate.year, pickedDate.month, pickedDate.day);
+      if (isStartDate) {
+        _startDate = value;
+        return;
+      }
+      _endDate = value;
+    });
+  }
+
+  void _toggleStatus(_TaskStatus status) {
+    setState(() {
+      if (_statuses.contains(status)) {
+        _statuses.remove(status);
+        return;
+      }
+      _statuses.add(status);
+    });
+  }
+
+  void _apply() {
+    Navigator.of(context).pop(
+      _TaskEntryFilter(
+        statuses: _statuses,
+        startDate: _startDate,
+        endDate: _endDate,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      backgroundColor: const Color(0xFF474747),
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                34,
+                18,
+                34,
+                24 + MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 42,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        tooltip: 'Close filter',
+                        icon: const Icon(Icons.close_rounded),
+                        color: Colors.white,
+                        iconSize: 34,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    const Text(
+                      'Filter By',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final status in _TaskStatus.values)
+                          SizedBox(
+                            width: 142,
+                            child: _FilterStatusChip(
+                              label: _statusStyle(status).label,
+                              isSelected: _statuses.contains(status),
+                              onPressed: () => _toggleStatus(status),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    _FilterFieldLabel(text: 'Start Date'),
+                    const SizedBox(height: 10),
+                    _DateFilterField(
+                      value: _formatFilterDate(_startDate),
+                      onTap: () => _pickDate(isStartDate: true),
+                    ),
+                    const SizedBox(height: 22),
+                    _FilterFieldLabel(text: 'End Date'),
+                    const SizedBox(height: 10),
+                    _DateFilterField(
+                      value: _formatFilterDate(_endDate),
+                      onTap: () => _pickDate(isStartDate: false),
+                    ),
+                    const SizedBox(height: 40),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _FilterActionButton(
+                            label: 'Apply',
+                            onPressed: _apply,
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: _FilterActionButton(
+                            label: 'Cancel',
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AddTaskEntryDialog extends StatefulWidget {
+  const _AddTaskEntryDialog({
+    required this.taskId,
+    required this.accessToken,
+    required this.defaultUserId,
+    required this.taskStartAt,
+  });
+
+  final int taskId;
+  final String accessToken;
+  final int defaultUserId;
+  final DateTime taskStartAt;
+
+  @override
+  State<_AddTaskEntryDialog> createState() => _AddTaskEntryDialogState();
+}
+
+class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
+  final _taskApi = TaskApi();
+  final _userApi = UserApi();
+  final _assigneeKey = GlobalKey();
+  final _startController = TextEditingController();
+  final _dueController = TextEditingController();
+  Future<List<_EntryAssignee>>? _assigneesFuture;
+  _EntryAssignee? _selectedAssignee;
+  DateTime? _startAt;
+  DateTime? _dueAt;
+  bool _showErrors = false;
+  bool _isSubmitting = false;
+  String? _submitError;
+
+  bool get _isComplete =>
+      _selectedAssignee != null &&
+      _startAt != null &&
+      _dueAt != null &&
+      _dueAt!.isAfter(_startAt!);
+
+  @override
+  void initState() {
+    super.initState();
+    _assigneesFuture = _loadAssignees();
+  }
+
+  @override
+  void dispose() {
+    _startController.dispose();
+    _dueController.dispose();
+    super.dispose();
+  }
+
+  Future<List<_EntryAssignee>> _loadAssignees() async {
+    final users = await _userApi.getUsers(
+      accessToken: widget.accessToken,
+      active: true,
+    );
+    final assignees = users
+        .map(_EntryAssignee.fromJson)
+        .where((user) => !user.isAdmin)
+        .toList();
+    _EntryAssignee? defaultAssignee;
+    for (final assignee in assignees) {
+      if (assignee.id == widget.defaultUserId) {
+        defaultAssignee = assignee;
+        break;
+      }
+    }
+    if (mounted && defaultAssignee != null) {
+      setState(() => _selectedAssignee = defaultAssignee);
+    }
+    return assignees;
+  }
+
+  Future<void> _pickDateTime({required bool isStart}) async {
+    final currentValue =
+        (isStart ? _startAt : _dueAt) ??
+        (isStart ? widget.taskStartAt : _startAt);
+    final initialValue = currentValue ?? DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initialValue,
+      firstDate: DateTime(DateTime.now().year - 1),
+      lastDate: DateTime(DateTime.now().year + 5),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF97DBFF),
+              onPrimary: Color(0xFF303030),
+              surface: Color(0xFF474747),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (date == null || !mounted) {
+      return;
+    }
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initialValue),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF97DBFF),
+              onPrimary: Color(0xFF303030),
+              surface: Color(0xFF474747),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (time == null) {
+      return;
+    }
+
+    final value = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    setState(() {
+      if (isStart) {
+        _startAt = value;
+        _startController.text = _formatDateTime(value);
+        if (_dueAt != null && !_dueAt!.isAfter(value)) {
+          _dueAt = null;
+          _dueController.clear();
+        }
+        return;
+      }
+      _dueAt = value;
+      _dueController.text = _formatDateTime(value);
+    });
+  }
+
+  Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _showErrors = true;
+      _submitError = null;
+    });
+
+    if (!_isComplete) {
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      await _taskApi.createTaskEntry(
+        taskId: widget.taskId,
+        accessToken: widget.accessToken,
+        userId: _selectedAssignee!.id,
+        startAt: _startAt!,
+        dueAt: _dueAt!,
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Task entry created.')));
+      Navigator.of(context).pop(true);
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _submitError = error.message);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dueError =
+        _showErrors &&
+        _dueAt != null &&
+        _startAt != null &&
+        !_dueAt!.isAfter(_startAt!);
+
+    return Dialog.fullscreen(
+      backgroundColor: const Color(0xFF474747),
+      child: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            18,
+            10,
+            18,
+            24 + MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () => Navigator.of(context).pop(false),
+                  tooltip: 'Close',
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  color: Colors.white,
+                  disabledColor: const Color(0xFF8E8E8E),
+                  iconSize: 32,
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Add Task Entry',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            FutureBuilder<List<_EntryAssignee>>(
+              future: _assigneesFuture,
+              builder: (context, snapshot) {
+                return _EntryAssigneeAutocomplete(
+                  fieldKey: _assigneeKey,
+                  value: _selectedAssignee,
+                  assignees: snapshot.data ?? const [],
+                  isLoading:
+                      snapshot.connectionState == ConnectionState.waiting,
+                  errorText: _showErrors && _selectedAssignee == null
+                      ? 'Assign User is required'
+                      : snapshot.hasError
+                      ? _errorMessage(snapshot.error)
+                      : null,
+                  onRetry: () => setState(() {
+                    _assigneesFuture = _loadAssignees();
+                  }),
+                  onChanged: (assignee) {
+                    setState(() => _selectedAssignee = assignee);
+                  },
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            _TaskEntryDateTimeField(
+              label: 'Start Time',
+              controller: _startController,
+              hasError: _showErrors && _startAt == null,
+              errorText: 'Start Time is required',
+              onTap: _isSubmitting ? null : () => _pickDateTime(isStart: true),
+            ),
+            const SizedBox(height: 16),
+            _TaskEntryDateTimeField(
+              label: 'Due Time',
+              controller: _dueController,
+              hasError: (_showErrors && _dueAt == null) || dueError,
+              errorText: _dueAt == null
+                  ? 'Due Time is required'
+                  : 'Due Time must be after Start Time',
+              onTap: _isSubmitting ? null : () => _pickDateTime(isStart: false),
+            ),
+            if (_submitError != null) ...[
+              const SizedBox(height: 18),
+              Text(
+                _submitError!,
+                style: const TextStyle(
+                  color: Color(0xFFFFB3B3),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0,
+                ),
+              ),
+            ],
+            const SizedBox(height: 34),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: _isSubmitting ? null : _submit,
+                style: FilledButton.styleFrom(
+                  backgroundColor: _isComplete
+                      ? const Color(0xFFD9D9D9)
+                      : const Color(0xFF8E8E8E),
+                  foregroundColor: _isComplete
+                      ? Colors.black
+                      : const Color(0xFF303030),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
+                  ),
+                ),
+                child: _isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF303030),
+                        ),
+                      )
+                    : const Text(
+                        'Create Entry',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskEntryDateTimeField extends StatelessWidget {
+  const _TaskEntryDateTimeField({
+    required this.label,
+    required this.controller,
+    required this.hasError,
+    required this.errorText,
+    required this.onTap,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final bool hasError;
+  final String errorText;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          readOnly: true,
+          onTap: onTap,
+          style: const TextStyle(
+            color: Colors.black,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
+          ),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFD9D9D9),
+            errorText: hasError ? errorText : null,
+            errorStyle: const TextStyle(
+              color: Color(0xFFFFB3B3),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0,
+            ),
+            suffixIcon: const Icon(
+              Icons.calendar_today_rounded,
+              color: Color(0xFF474747),
+              size: 20,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: hasError ? const Color(0xFFFF4048) : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: hasError
+                    ? const Color(0xFFFF4048)
+                    : const Color(0xFF23A8FF),
+                width: 2,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFFF4048), width: 2),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFFF4048), width: 2),
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EntryAssigneeAutocomplete extends StatelessWidget {
+  const _EntryAssigneeAutocomplete({
+    required this.fieldKey,
+    required this.value,
+    required this.assignees,
+    required this.isLoading,
+    required this.onChanged,
+    this.errorText,
+    this.onRetry,
+  });
+
+  final Key fieldKey;
+  final _EntryAssignee? value;
+  final List<_EntryAssignee> assignees;
+  final bool isLoading;
+  final ValueChanged<_EntryAssignee?> onChanged;
+  final String? errorText;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: fieldKey,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Assign User',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0,
+          ),
+        ),
+        const SizedBox(height: 8),
+        RawAutocomplete<_EntryAssignee>(
+          key: ValueKey(value?.id),
+          initialValue: TextEditingValue(text: value?.label ?? ''),
+          displayStringForOption: (assignee) => assignee.label,
+          optionsBuilder: (textEditingValue) {
+            if (isLoading || assignees.isEmpty) {
+              return const Iterable<_EntryAssignee>.empty();
+            }
+
+            final query = textEditingValue.text.trim().toLowerCase();
+            if (query.isEmpty) {
+              return assignees;
+            }
+            return assignees.where((assignee) {
+              return assignee.searchText.contains(query);
+            });
+          },
+          onSelected: onChanged,
+          fieldViewBuilder:
+              (context, textController, focusNode, onFieldSubmitted) {
+                return TextField(
+                  controller: textController,
+                  focusNode: focusNode,
+                  enabled: !isLoading,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0,
+                  ),
+                  onChanged: (text) {
+                    if (value != null && text != value!.label) {
+                      onChanged(null);
+                    }
+                  },
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFFD9D9D9),
+                    hintText: isLoading ? 'Loading users...' : 'Search by name',
+                    errorText: errorText,
+                    errorStyle: const TextStyle(
+                      color: Color(0xFFFFB3B3),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+                    suffixIcon: isLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF474747),
+                                ),
+                              ),
+                            ),
+                          )
+                        : const Icon(
+                            Icons.manage_search_rounded,
+                            color: Color(0xFF474747),
+                            size: 22,
+                          ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: errorText == null
+                            ? Colors.transparent
+                            : const Color(0xFFFF4048),
+                        width: 2,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: errorText == null
+                            ? const Color(0xFF23A8FF)
+                            : const Color(0xFFFF4048),
+                        width: 2,
+                      ),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFFFF4048),
+                        width: 2,
+                      ),
+                    ),
+                    focusedErrorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFFFF4048),
+                        width: 2,
+                      ),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                );
+              },
+          optionsViewBuilder: (context, onSelected, options) {
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                color: const Color(0xFFD9D9D9),
+                elevation: 8,
+                borderRadius: BorderRadius.circular(12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 420,
+                    maxHeight: 240,
+                  ),
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (context, index) {
+                      final assignee = options.elementAt(index);
+                      return InkWell(
+                        onTap: () => onSelected(assignee),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
+                          ),
+                          child: Text(
+                            assignee.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        if (errorText != null && onRetry != null) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Retry loading users'),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+          ),
+        ],
+      ],
+    );
   }
 }
 
@@ -1263,54 +2232,104 @@ class _TaskEntryTile extends StatelessWidget {
     final style = _statusStyle(entry.status);
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 18, 14),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF3F3F3F),
+          borderRadius: BorderRadius.circular(10),
+          border: Border(left: BorderSide(color: style.markerColor, width: 4)),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Entry #${entry.id}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 0,
-              ),
-            ),
-            const SizedBox(height: 12),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 13,
-                  height: 13,
-                  decoration: BoxDecoration(
-                    color: style.markerColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    '${entry.startTimeLabel} - Due ${entry.timeLabel}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFFC7C7C7),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 0,
-                    ),
+                  child: Column(
+                    children: [
+                      _EntryMetaLine(
+                        icon: Icons.play_arrow_rounded,
+                        label: 'Start',
+                        value: entry.startTimeLabel,
+                      ),
+                      const SizedBox(height: 8),
+                      _EntryMetaLine(
+                        icon: Icons.flag_rounded,
+                        label: 'Due',
+                        value: entry.timeLabel,
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 10),
                 _StatusPill(status: entry.status),
               ],
             ),
+            if (onTap != null) ...[
+              const SizedBox(height: 12),
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  color: Color(0xFFC7C7C7),
+                  size: 24,
+                ),
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _EntryMetaLine extends StatelessWidget {
+  const _EntryMetaLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: const Color(0xFFC7C7C7), size: 18),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 44,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFFC7C7C7),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1382,6 +2401,8 @@ class _Task {
     required this.recurrenceInterval,
     required this.recurrenceUnit,
     required this.recurrenceStartAt,
+    required this.dueInterval,
+    required this.dueIntervalUnit,
     required this.isActive,
   });
 
@@ -1396,6 +2417,8 @@ class _Task {
       recurrenceInterval: _intFrom(json['recurrence_interval']),
       recurrenceUnit: json['recurrence_unit']?.toString(),
       recurrenceStartAt: _dateFrom(json['recurrence_start_at']),
+      dueInterval: _intFrom(json['due_interval']),
+      dueIntervalUnit: json['due_interval_unit']?.toString() ?? 'Day',
       isActive: json['is_active'] == true,
     );
   }
@@ -1409,6 +2432,8 @@ class _Task {
   final int recurrenceInterval;
   final String? recurrenceUnit;
   final DateTime recurrenceStartAt;
+  final int dueInterval;
+  final String dueIntervalUnit;
   final bool isActive;
 
   String get recurrenceLabel {
@@ -1492,6 +2517,53 @@ class _TaskFilter {
   final String searchText;
 }
 
+class _TaskEntryFilter {
+  const _TaskEntryFilter({
+    this.statuses = const {},
+    this.startDate,
+    this.endDate,
+  });
+
+  final Set<_TaskStatus> statuses;
+  final DateTime? startDate;
+  final DateTime? endDate;
+}
+
+class _EntryAssignee {
+  const _EntryAssignee({
+    required this.id,
+    required this.name,
+    required this.employeeId,
+    required this.role,
+  });
+
+  factory _EntryAssignee.fromJson(Map<String, dynamic> json) {
+    return _EntryAssignee(
+      id: _intFrom(json['id']),
+      name: json['name']?.toString() ?? 'User',
+      employeeId: json['employee_id']?.toString() ?? '',
+      role: json['role']?.toString() ?? '',
+    );
+  }
+
+  final int id;
+  final String name;
+  final String employeeId;
+  final String role;
+
+  String get label {
+    return name;
+  }
+
+  String get searchText {
+    return '$name $employeeId'.toLowerCase();
+  }
+
+  bool get isAdmin {
+    return role.trim().toLowerCase() == 'admin';
+  }
+}
+
 ({
   Color backgroundColor,
   Color foregroundColor,
@@ -1573,6 +2645,20 @@ String _formatDateTime(DateTime value) {
   final minute = value.minute.toString().padLeft(2, '0');
   final period = value.hour >= 12 ? 'pm' : 'am';
   return '${value.day}/${value.month}/${value.year} $hour:$minute $period';
+}
+
+String _formatDateTimeWithLineBreak(DateTime value) {
+  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+  final minute = value.minute.toString().padLeft(2, '0');
+  final period = value.hour >= 12 ? 'pm' : 'am';
+  return '${value.day}/${value.month}/${value.year}\n$hour:$minute $period';
+}
+
+String _formatFilterDate(DateTime? date) {
+  if (date == null) {
+    return '';
+  }
+  return '${date.day}/${date.month}/${date.year}';
 }
 
 DateTime? _closestEntryDueAt(List<_TaskEntry> entries) {

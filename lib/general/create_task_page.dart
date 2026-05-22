@@ -13,6 +13,7 @@ class CreateTaskPage extends StatefulWidget {
     required this.currentUserRole,
     required this.onBack,
     required this.onTaskCreated,
+    this.initialValues,
   });
 
   final String accessToken;
@@ -20,9 +21,36 @@ class CreateTaskPage extends StatefulWidget {
   final String currentUserRole;
   final VoidCallback onBack;
   final VoidCallback onTaskCreated;
+  final CreateTaskInitialValues? initialValues;
 
   @override
   State<CreateTaskPage> createState() => _CreateTaskPageState();
+}
+
+class CreateTaskInitialValues {
+  const CreateTaskInitialValues({
+    required this.taskId,
+    required this.title,
+    required this.description,
+    required this.userId,
+    required this.location,
+    required this.recurrenceType,
+    required this.recurrenceStartAt,
+    required this.dueInterval,
+    required this.dueIntervalUnit,
+    required this.isActive,
+  });
+
+  final int taskId;
+  final String title;
+  final String description;
+  final int userId;
+  final String location;
+  final String recurrenceType;
+  final DateTime recurrenceStartAt;
+  final int dueInterval;
+  final String dueIntervalUnit;
+  final bool isActive;
 }
 
 enum _TaskRecurrence { daily, weekly, monthly, once }
@@ -64,12 +92,14 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
   bool _isSubmitting = false;
   String? _submitError;
 
+  bool get _isEditing => widget.initialValues != null;
+
   bool get _isComplete =>
       _titleController.text.trim().isNotEmpty &&
       _descriptionController.text.trim().isNotEmpty &&
       _selectedAssignee != null &&
       _recurrenceStartAt != null &&
-      !_isStartInPast &&
+      (_isEditing || !_isStartInPast) &&
       _dueInterval > -1 &&
       _locationController.text.trim().isNotEmpty;
 
@@ -80,6 +110,7 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
   @override
   void initState() {
     super.initState();
+    _loadInitialValues();
     _assignableUsersFuture = _loadAssignableUsers();
     for (final controller in [
       _titleController,
@@ -108,7 +139,42 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
       accessToken: widget.accessToken,
       active: true,
     );
-    return users.map(_TaskOperator.fromJson).where(_isAssignableUser).toList();
+    final assignableUsers = users
+        .map(_TaskOperator.fromJson)
+        .where(_isAssignableUser)
+        .toList();
+    final initialUserId = widget.initialValues?.userId;
+    if (initialUserId != null && mounted) {
+      for (final user in assignableUsers) {
+        if (user.id == initialUserId) {
+          setState(() => _selectedAssignee = user);
+          break;
+        }
+      }
+    }
+    return assignableUsers;
+  }
+
+  void _loadInitialValues() {
+    final values = widget.initialValues;
+    if (values == null) {
+      return;
+    }
+
+    _titleController.text = values.title;
+    _descriptionController.text = values.description;
+    _locationController.text = values.location;
+    _dueIntervalController.text = values.dueInterval.toString();
+    _recurrenceStartAt = values.recurrenceStartAt;
+    _startTimeController.text = _formatDateTime(values.recurrenceStartAt);
+    _recurrence = switch (values.recurrenceType.trim().toLowerCase()) {
+      'recurring' => _TaskRecurrence.daily,
+      'daily' => _TaskRecurrence.daily,
+      'weekly' => _TaskRecurrence.weekly,
+      'monthly' => _TaskRecurrence.monthly,
+      _ => _TaskRecurrence.once,
+    };
+    _dueIntervalUnit = _intervalUnitFrom(values.dueIntervalUnit);
   }
 
   bool _isAssignableUser(_TaskOperator user) {
@@ -141,7 +207,7 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
   }
 
   bool get _isStartInvalid =>
-      _showErrors && (_isStartMissing || _isStartInPast);
+      _showErrors && (_isStartMissing || (!_isEditing && _isStartInPast));
   bool get _isDueIntervalInvalid => _showErrors && _dueInterval < 0;
 
   GlobalKey? _firstMissingFieldKey() {
@@ -157,7 +223,7 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
     if (_recurrenceStartAt == null) {
       return _startTimeKey;
     }
-    if (_isStartInPast) {
+    if (!_isEditing && _isStartInPast) {
       return _startTimeKey;
     }
     if (_dueInterval < 0) {
@@ -404,25 +470,43 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
 
     setState(() => _isSubmitting = true);
     try {
-      await _taskApi.createTask(
-        accessToken: widget.accessToken,
-        name: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        userId: _selectedAssignee!.id,
-        location: _locationController.text.trim(),
-        recurrenceType: _recurrenceType,
-        recurrenceInterval: 1,
-        recurrenceUnit: _recurrenceUnit,
-        recurrenceStartAt: _recurrenceStartAt!,
-        dueInterval: _dueInterval,
-        dueIntervalUnit: _dueIntervalUnit.backendValue,
-      );
+      if (_isEditing) {
+        await _taskApi.updateTask(
+          taskId: widget.initialValues!.taskId,
+          accessToken: widget.accessToken,
+          name: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          userId: _selectedAssignee!.id,
+          location: _locationController.text.trim(),
+          recurrenceType: _recurrenceType,
+          recurrenceInterval: 1,
+          recurrenceUnit: _recurrenceUnit,
+          recurrenceStartAt: _recurrenceStartAt!,
+          dueInterval: _dueInterval,
+          dueIntervalUnit: _dueIntervalUnit.backendValue,
+          isActive: widget.initialValues!.isActive,
+        );
+      } else {
+        await _taskApi.createTask(
+          accessToken: widget.accessToken,
+          name: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          userId: _selectedAssignee!.id,
+          location: _locationController.text.trim(),
+          recurrenceType: _recurrenceType,
+          recurrenceInterval: 1,
+          recurrenceUnit: _recurrenceUnit,
+          recurrenceStartAt: _recurrenceStartAt!,
+          dueInterval: _dueInterval,
+          dueIntervalUnit: _dueIntervalUnit.backendValue,
+        );
+      }
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Task created.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_isEditing ? 'Task updated.' : 'Task created.')),
+      );
       widget.onTaskCreated();
     } on AuthApiException catch (error) {
       if (!mounted) {
@@ -453,7 +537,10 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _CreateTaskHeader(onBack: _isSubmitting ? null : widget.onBack),
+        _CreateTaskHeader(
+          title: _isEditing ? 'Edit Task' : 'Create Task',
+          onBack: _isSubmitting ? null : widget.onBack,
+        ),
         const _CreateTaskSectionTitle(title: 'Job Details'),
         Expanded(
           child: ListView(
@@ -594,7 +681,9 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
                 child: FilledButton.icon(
                   onPressed: _isSubmitting ? null : _validateAndCreateTask,
                   label: Text(
-                    _isSubmitting ? 'Creating...' : 'Create Task',
+                    _isSubmitting
+                        ? (_isEditing ? 'Saving...' : 'Creating...')
+                        : (_isEditing ? 'Save Task' : 'Create Task'),
                     overflow: TextOverflow.ellipsis,
                   ),
                   style: FilledButton.styleFrom(
@@ -624,8 +713,9 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
 }
 
 class _CreateTaskHeader extends StatelessWidget {
-  const _CreateTaskHeader({required this.onBack});
+  const _CreateTaskHeader({required this.title, required this.onBack});
 
+  final String title;
   final VoidCallback? onBack;
 
   @override
@@ -648,12 +738,12 @@ class _CreateTaskHeader extends StatelessWidget {
             iconSize: 32,
           ),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Create Task',
+              title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 21,
                 fontWeight: FontWeight.w800,
@@ -792,6 +882,7 @@ class _AssigneeAutocomplete extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         RawAutocomplete<_TaskOperator>(
+          key: ValueKey(value?.id),
           initialValue: TextEditingValue(text: value?.label ?? ''),
           displayStringForOption: (operator) => operator.label,
           optionsBuilder: (textEditingValue) {
@@ -1141,6 +1232,16 @@ class _TaskOperator {
   bool get isOperator {
     return role.trim().toLowerCase() == 'operator';
   }
+}
+
+_IntervalUnit _intervalUnitFrom(String value) {
+  final normalized = value.trim().toLowerCase();
+  for (final unit in _IntervalUnit.values) {
+    if (unit.backendValue.toLowerCase() == normalized) {
+      return unit;
+    }
+  }
+  return _IntervalUnit.day;
 }
 
 InputDecoration _fieldDecoration({

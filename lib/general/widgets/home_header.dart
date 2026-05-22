@@ -75,22 +75,30 @@ class _HomeHeader extends StatelessWidget {
                       onTaskEdit?.call();
                       return;
                     }
-                    onTaskDelete?.call();
+                    if (onTaskDelete != null) {
+                      onTaskDelete?.call();
+                    }
                   },
                   itemBuilder: (context) {
-                    return const [
+                    return [
                       PopupMenuItem(
                         value: 'edit',
-                        child: Text(
+                        enabled: onTaskEdit != null,
+                        child: const Text(
                           'Edit',
                           style: TextStyle(color: Colors.white),
                         ),
                       ),
                       PopupMenuItem(
                         value: 'delete',
+                        enabled: onTaskDelete != null,
                         child: Text(
                           'Delete',
-                          style: TextStyle(color: Colors.white),
+                          style: TextStyle(
+                            color: onTaskDelete == null
+                                ? const Color(0xFF777777)
+                                : Colors.white,
+                          ),
                         ),
                       ),
                     ];
