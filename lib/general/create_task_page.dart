@@ -823,19 +823,15 @@ class _CreateTaskField extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        TextField(
+        TextFormField(
           controller: controller,
           minLines: minLines,
           maxLines: maxLines,
           readOnly: readOnly,
           onTap: onTap,
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 0,
-          ),
-          decoration: _fieldDecoration(
+          cursorColor: Colors.black,
+          style: const TextStyle(color: Colors.black, fontSize: 16),
+          decoration: _taskInputDecoration(
             hasError: hasError,
             errorText: hasError ? errorText ?? '$label is required' : null,
             suffixIcon: suffixIcon,
@@ -901,23 +897,19 @@ class _AssigneeAutocomplete extends StatelessWidget {
           onSelected: onChanged,
           fieldViewBuilder:
               (context, textController, focusNode, onFieldSubmitted) {
-                return TextField(
+                return TextFormField(
                   controller: textController,
                   focusNode: focusNode,
                   enabled: !isLoading,
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0,
-                  ),
+                  cursorColor: Colors.black,
+                  style: const TextStyle(color: Colors.black, fontSize: 16),
                   onChanged: (text) {
                     if (value != null && text != value!.label) {
                       onChanged(null);
                     }
                   },
                   decoration:
-                      _fieldDecoration(
+                      _taskInputDecoration(
                         hasError: errorText != null,
                         errorText: errorText,
                         suffixIcon: isLoading
@@ -1048,16 +1040,12 @@ class _DueIntervalField extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: TextField(
+              child: TextFormField(
                 controller: controller,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0,
-                ),
-                decoration: _fieldDecoration(
+                cursorColor: Colors.black,
+                style: const TextStyle(color: Colors.black, fontSize: 16),
+                decoration: _taskInputDecoration(
                   hasError: hasError,
                   errorText: hasError ? 'Due interval must be 0 or more' : null,
                 ),
@@ -1069,7 +1057,7 @@ class _DueIntervalField extends StatelessWidget {
               child: DropdownButtonFormField<_IntervalUnit>(
                 initialValue: unit,
                 dropdownColor: const Color(0xFFD9D9D9),
-                decoration: _fieldDecoration(hasError: false),
+                decoration: _taskInputDecoration(hasError: false),
                 items: _IntervalUnit.values
                     .map(
                       (unit) => DropdownMenuItem<_IntervalUnit>(
@@ -1244,7 +1232,7 @@ _IntervalUnit _intervalUnitFrom(String value) {
   return _IntervalUnit.day;
 }
 
-InputDecoration _fieldDecoration({
+InputDecoration _taskInputDecoration({
   required bool hasError,
   String? errorText,
   IconData? suffixIcon,
@@ -1253,42 +1241,31 @@ InputDecoration _fieldDecoration({
     filled: true,
     fillColor: const Color(0xFFD9D9D9),
     errorText: errorText,
-    errorStyle: const TextStyle(
-      color: Color(0xFFFFB3B3),
-      fontSize: 13,
-      fontWeight: FontWeight.w700,
-      letterSpacing: 0,
-    ),
+    errorMaxLines: 2,
     suffixIcon: suffixIcon == null
         ? null
         : Icon(suffixIcon, color: const Color(0xFF474747), size: 20),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(
-        color: hasError ? const Color(0xFFFF4048) : Colors.transparent,
-        width: 2,
-      ),
+    border: const OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide.none,
     ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(
-        color: hasError ? const Color(0xFFFF4048) : Colors.transparent,
-        width: 2,
-      ),
+    enabledBorder: const OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide.none,
     ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF23A8FF), width: 2),
+    focusedBorder: const OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide.none,
     ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFFF4048), width: 2),
+    errorBorder: const OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide(color: Color(0xFFFF9B9B), width: 1.6),
     ),
-    focusedErrorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFFF4048), width: 2),
+    focusedErrorBorder: const OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide(color: Color(0xFFFF9B9B), width: 1.8),
     ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
   );
 }
 

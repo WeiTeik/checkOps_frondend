@@ -20,7 +20,7 @@ class SubmitProofPage extends StatefulWidget {
   State<SubmitProofPage> createState() => _SubmitProofPageState();
 }
 
-enum _ProofStatus { completed, failed }
+enum _ProofStatus { submitted, failed }
 
 class _ProofEvidence {
   const _ProofEvidence({required this.name, required this.bytes});
@@ -273,13 +273,13 @@ class _SubmitProofPageState extends State<SubmitProofPage> {
                   children: [
                     Expanded(
                       child: _ProofStatusButton(
-                        label: 'Completed',
+                        label: 'Submitted',
                         icon: Icons.check_rounded,
-                        selected: _status == _ProofStatus.completed,
+                        selected: _status == _ProofStatus.submitted,
                         selectedColor: const Color(0xFF7CFF8A),
                         selectedTextColor: const Color(0xFF008F13),
                         onPressed: () {
-                          setState(() => _status = _ProofStatus.completed);
+                          setState(() => _status = _ProofStatus.submitted);
                         },
                       ),
                     ),

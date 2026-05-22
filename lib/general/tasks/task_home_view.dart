@@ -10,7 +10,7 @@ class _TaskHomeView extends StatefulWidget {
     required this.onTaskDetailBack,
     this.onAddTask,
     this.onPendingTaskEntrySelected,
-    this.onCompletedTaskEntrySelected,
+    this.onSubmittedTaskEntrySelected,
     this.showSummary = true,
     this.sectionTitle = 'Tasks List',
   });
@@ -23,7 +23,7 @@ class _TaskHomeView extends StatefulWidget {
   final VoidCallback onTaskDetailBack;
   final VoidCallback? onAddTask;
   final ValueChanged<_TaskEntry>? onPendingTaskEntrySelected;
-  final ValueChanged<_TaskEntry>? onCompletedTaskEntrySelected;
+  final ValueChanged<_TaskEntry>? onSubmittedTaskEntrySelected;
   final bool showSummary;
   final String sectionTitle;
 
@@ -176,7 +176,7 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
         accessToken: widget.accessToken,
         role: widget.role,
         onPendingTaskEntrySelected: widget.onPendingTaskEntrySelected,
-        onCompletedTaskEntrySelected: widget.onCompletedTaskEntrySelected,
+        onSubmittedTaskEntrySelected: widget.onSubmittedTaskEntrySelected,
       );
     }
 
@@ -270,14 +270,14 @@ class _TaskEntryListView extends StatefulWidget {
     required this.accessToken,
     required this.role,
     this.onPendingTaskEntrySelected,
-    this.onCompletedTaskEntrySelected,
+    this.onSubmittedTaskEntrySelected,
   });
 
   final _Task task;
   final String accessToken;
   final UserRole role;
   final ValueChanged<_TaskEntry>? onPendingTaskEntrySelected;
-  final ValueChanged<_TaskEntry>? onCompletedTaskEntrySelected;
+  final ValueChanged<_TaskEntry>? onSubmittedTaskEntrySelected;
 
   @override
   State<_TaskEntryListView> createState() => _TaskEntryListViewState();
@@ -447,8 +447,8 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
       }
       return null;
     }
-    if (entry.status == _TaskStatus.completed) {
-      return () => widget.onCompletedTaskEntrySelected?.call(entry);
+    if (entry.status == _TaskStatus.submitted) {
+      return () => widget.onSubmittedTaskEntrySelected?.call(entry);
     }
     return null;
   }
@@ -1049,6 +1049,11 @@ class _TaskEntryFilterDialogState extends State<_TaskEntryFilterDialog> {
   late final Set<_TaskStatus> _statuses = {...widget.initialFilter.statuses};
   late DateTime? _startDate = widget.initialFilter.startDate;
   late DateTime? _endDate = widget.initialFilter.endDate;
+  static const _statusRows = [
+    [_TaskStatus.pending, _TaskStatus.submitted],
+    [_TaskStatus.approved, _TaskStatus.rejected],
+    [_TaskStatus.failed, _TaskStatus.expired],
+  ];
 
   Future<void> _pickDate({required bool isStartDate}) async {
     final initialDate = (isStartDate ? _startDate : _endDate) ?? DateTime.now();
@@ -1148,19 +1153,30 @@ class _TaskEntryFilterDialogState extends State<_TaskEntryFilterDialog> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
+                    Column(
                       children: [
-                        for (final status in _TaskStatus.values)
-                          SizedBox(
-                            width: 142,
-                            child: _FilterStatusChip(
-                              label: _statusStyle(status).label,
-                              isSelected: _statuses.contains(status),
-                              onPressed: () => _toggleStatus(status),
-                            ),
+                        for (final row in _statusRows) ...[
+                          Row(
+                            children: [
+                              for (
+                                var index = 0;
+                                index < row.length;
+                                index++
+                              ) ...[
+                                if (index > 0) const SizedBox(width: 12),
+                                Expanded(
+                                  child: _FilterStatusChip(
+                                    label: _statusStyle(row[index]).label,
+                                    isSelected: _statuses.contains(row[index]),
+                                    onPressed: () => _toggleStatus(row[index]),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
+                          if (row != _statusRows.last)
+                            const SizedBox(height: 12),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 28),
@@ -1306,22 +1322,9 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
       return;
     }
 
-    final time = await showTimePicker(
-      context: context,
+    final time = await _pickTaskEntryTime(
+      title: isStart ? 'Start Time' : 'Due Time',
       initialTime: TimeOfDay.fromDateTime(initialValue),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFF97DBFF),
-              onPrimary: Color(0xFF303030),
-              surface: Color(0xFF474747),
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (time == null) {
       return;
@@ -1347,6 +1350,173 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
       _dueAt = value;
       _dueController.text = _formatDateTime(value);
     });
+  }
+
+  Future<TimeOfDay?> _pickTaskEntryTime({
+    required String title,
+    required TimeOfDay initialTime,
+  }) async {
+    var selectedHour = initialTime.hourOfPeriod == 0
+        ? 12
+        : initialTime.hourOfPeriod;
+    var selectedMinute = initialTime.minute;
+    var selectedPeriod = initialTime.period;
+    final hourController = FixedExtentScrollController(
+      initialItem: selectedHour - 1,
+    );
+    final minuteController = FixedExtentScrollController(
+      initialItem: selectedMinute,
+    );
+    final periodController = FixedExtentScrollController(
+      initialItem: selectedPeriod == DayPeriod.am ? 0 : 1,
+    );
+
+    final pickedTime = await showModalBottomSheet<TimeOfDay>(
+      context: context,
+      backgroundColor: const Color(0xFF303030),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: StatefulBuilder(
+            builder: (context, setSheetState) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF8E8E8E),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      height: 174,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _TaskEntryTimeWheel(
+                              controller: hourController,
+                              children: [
+                                for (var hour = 1; hour <= 12; hour++)
+                                  Text(hour.toString().padLeft(2, '0')),
+                              ],
+                              onSelectedItemChanged: (index) {
+                                setSheetState(() => selectedHour = index + 1);
+                              },
+                            ),
+                          ),
+                          const Text(
+                            ':',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                          Expanded(
+                            child: _TaskEntryTimeWheel(
+                              controller: minuteController,
+                              children: [
+                                for (var minute = 0; minute < 60; minute++)
+                                  Text(minute.toString().padLeft(2, '0')),
+                              ],
+                              onSelectedItemChanged: (index) {
+                                setSheetState(() => selectedMinute = index);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 82,
+                            child: _TaskEntryTimeWheel(
+                              controller: periodController,
+                              children: const [Text('AM'), Text('PM')],
+                              onSelectedItemChanged: (index) {
+                                setSheetState(
+                                  () => selectedPeriod = index == 0
+                                      ? DayPeriod.am
+                                      : DayPeriod.pm,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(
+                                color: Color(0xFFC7C7C7),
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () {
+                              final hour = selectedPeriod == DayPeriod.am
+                                  ? (selectedHour == 12 ? 0 : selectedHour)
+                                  : (selectedHour == 12
+                                        ? 12
+                                        : selectedHour + 12);
+                              Navigator.of(context).pop(
+                                TimeOfDay(hour: hour, minute: selectedMinute),
+                              );
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFFD9D9D9),
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Set Time'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    hourController.dispose();
+    minuteController.dispose();
+    periodController.dispose();
+    return pickedTime;
   }
 
   Future<void> _submit() async {
@@ -1623,6 +1793,60 @@ class _TaskEntryDateTimeField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TaskEntryTimeWheel extends StatelessWidget {
+  const _TaskEntryTimeWheel({
+    required this.controller,
+    required this.children,
+    required this.onSelectedItemChanged,
+  });
+
+  final FixedExtentScrollController controller;
+  final List<Widget> children;
+  final ValueChanged<int> onSelectedItemChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const pickerTextStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 22,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0,
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF474747),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF5F5F5F)),
+      ),
+      child: CupertinoPicker(
+        scrollController: controller,
+        itemExtent: 42,
+        magnification: 1.08,
+        squeeze: 1.05,
+        useMagnifier: true,
+        selectionOverlay: Container(
+          decoration: BoxDecoration(
+            border: Border.symmetric(
+              horizontal: BorderSide(
+                color: const Color(0xFF97DBFF).withValues(alpha: 0.65),
+                width: 1.5,
+              ),
+            ),
+          ),
+        ),
+        onSelectedItemChanged: onSelectedItemChanged,
+        children: [
+          for (final child in children)
+            Center(
+              child: DefaultTextStyle(style: pickerTextStyle, child: child),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -2264,7 +2488,7 @@ class _TaskEntryTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 _StatusPill(status: entry.status),
               ],
             ),
@@ -2301,21 +2525,21 @@ class _EntryMetaLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: const Color(0xFFC7C7C7), size: 18),
-        const SizedBox(width: 8),
+        Icon(icon, color: const Color(0xFFC7C7C7), size: 16),
+        const SizedBox(width: 4),
         SizedBox(
-          width: 44,
+          width: 31,
           child: Text(
             label,
             style: const TextStyle(
               color: Color(0xFFC7C7C7),
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               letterSpacing: 0,
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 4),
         Expanded(
           child: Text(
             value,
@@ -2343,7 +2567,7 @@ class _StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = _statusStyle(status);
     return Container(
-      width: 112,
+      width: 96,
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
         color: style.backgroundColor,
@@ -2363,7 +2587,7 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-enum _TaskStatus { pending, completed, failed, approved, rejected, expired }
+enum _TaskStatus { pending, submitted, failed, approved, rejected, expired }
 
 class _TaskDetailData {
   const _TaskDetailData({
@@ -2498,7 +2722,7 @@ class _TaskEntry {
 
   bool isCurrentActiveCycleEntry(DateTime now) {
     final isActiveStatus =
-        status == _TaskStatus.pending || status == _TaskStatus.completed;
+        status == _TaskStatus.pending || status == _TaskStatus.submitted;
     return isActiveStatus && !now.isBefore(startAt) && !now.isAfter(dueAt);
   }
 }
@@ -2572,11 +2796,11 @@ class _EntryAssignee {
 })
 _statusStyle(_TaskStatus status) {
   return switch (status) {
-    _TaskStatus.completed => (
+    _TaskStatus.submitted => (
       backgroundColor: const Color(0xFF7CFF8A),
       foregroundColor: const Color(0xFF008F13),
       markerColor: const Color(0xFF00B316),
-      label: 'Completed',
+      label: 'Submitted',
     ),
     _TaskStatus.approved => (
       backgroundColor: const Color(0xFFB9F6CA),
@@ -2613,7 +2837,8 @@ _statusStyle(_TaskStatus status) {
 
 _TaskStatus _statusFrom(Object? value) {
   return switch (value?.toString().trim().toLowerCase()) {
-    'completed' => _TaskStatus.completed,
+    'submitted' => _TaskStatus.submitted,
+    'completed' => _TaskStatus.submitted,
     'failed' => _TaskStatus.failed,
     'approved' => _TaskStatus.approved,
     'rejected' => _TaskStatus.rejected,

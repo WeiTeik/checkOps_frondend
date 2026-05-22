@@ -25,7 +25,7 @@ class _AdminDashboardView extends StatelessWidget {
                   Expanded(
                     child: _AdminMetricCard(
                       value: '2',
-                      label: 'Completed',
+                      label: 'Submitted',
                       color: Color(0xFF00B316),
                     ),
                   ),

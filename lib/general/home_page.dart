@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
@@ -236,7 +237,7 @@ class _HomePageState extends State<HomePage> {
                                   _editingTask = null;
                                   _showCreateTask = true;
                                 }),
-                                onCompletedTaskEntrySelected: (entry) =>
+                                onSubmittedTaskEntrySelected: (entry) =>
                                     setState(() => _reviewTaskEntry = entry),
                               ),
                               const _PlaceholderView(
@@ -279,7 +280,7 @@ class _HomePageState extends State<HomePage> {
                                         () => _selectedTaskEntry = entry,
                                       )
                                     : null,
-                                onCompletedTaskEntrySelected: (entry) =>
+                                onSubmittedTaskEntrySelected: (entry) =>
                                     setState(() => _reviewTaskEntry = entry),
                               ),
                               const _PlaceholderView(

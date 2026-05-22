@@ -134,7 +134,7 @@ class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        const _CompletedChip(),
+                        const _SubmittedChip(),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -338,8 +338,8 @@ class _ReviewSubmissionHeader extends StatelessWidget {
   }
 }
 
-class _CompletedChip extends StatelessWidget {
-  const _CompletedChip();
+class _SubmittedChip extends StatelessWidget {
+  const _SubmittedChip();
 
   @override
   Widget build(BuildContext context) {
@@ -350,7 +350,7 @@ class _CompletedChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(13),
       ),
       child: const Text(
-        'Completed',
+        'Submitted',
         style: TextStyle(
           color: Color(0xFF008F13),
           fontSize: 15,
