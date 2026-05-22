@@ -32,7 +32,10 @@ class CheckOpsBottomNav extends StatelessWidget {
               icon: Icon(Icons.check_box_outlined),
               label: 'Tasks',
             ),
-            _BottomNavItem(icon: Icon(Icons.history_rounded), label: 'History'),
+            _BottomNavItem(
+              icon: Icon(Icons.notifications_rounded),
+              label: 'Notification',
+            ),
             _BottomNavItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
           ]
         : const <_BottomNavItem>[
@@ -40,7 +43,10 @@ class CheckOpsBottomNav extends StatelessWidget {
               icon: Icon(Icons.check_box_outlined),
               label: 'Tasks',
             ),
-            _BottomNavItem(icon: Icon(Icons.history_rounded), label: 'History'),
+            _BottomNavItem(
+              icon: Icon(Icons.notifications_rounded),
+              label: 'Notification',
+            ),
             _BottomNavItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
           ];
     final iconSize = isAdmin ? 22.0 : 25.0;

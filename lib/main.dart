@@ -118,7 +118,7 @@ class _AuthGate extends StatefulWidget {
 
   @override
   State<_AuthGate> createState() => _AuthGateState();
-}
+} 
 
 class _AuthGateState extends State<_AuthGate> {
   late final Future<AuthSession?> _restoreSession = widget.sessionManager
