@@ -895,13 +895,15 @@ class _AddUserSubmitButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 48,
-      child: FilledButton(
+      child: OutlinedButton(
         onPressed: isSubmitting ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF67D8FF),
-          disabledBackgroundColor: const Color(0xFF6B8791),
-          foregroundColor: const Color(0xFF003F59),
-          disabledForegroundColor: const Color(0xFF1F343B),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.white,
+          disabledForegroundColor: const Color(0xFF8E8E8E),
+          side: BorderSide(
+            color: isSubmitting ? const Color(0xFF8E8E8E) : Colors.white,
+            width: 2,
+          ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -912,7 +914,7 @@ class _AddUserSubmitButton extends StatelessWidget {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.4,
-                  color: Color(0xFF003F59),
+                  color: Colors.white,
                 ),
               )
             : Text(

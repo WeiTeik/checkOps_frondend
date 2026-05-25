@@ -18,10 +18,10 @@ part '../admin/admin_users_view.dart';
 part '../admin/users/admin_user_filter_dialog.dart';
 part '../admin/users/admin_user_form_dialogs.dart';
 part '../admin/users/admin_user_widgets.dart';
+part 'notifications/notification_view.dart';
 part 'profile/profile_view.dart';
 part 'tasks/task_home_view.dart';
 part 'widgets/home_header.dart';
-part 'widgets/placeholder_view.dart';
 
 enum UserRole { operator, qc, admin }
 
@@ -85,6 +85,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _taskApi = TaskApi();
   int _selectedIndex = 0;
   late String _displayName = widget.displayName;
   late String _email = widget.email;
@@ -105,6 +106,15 @@ class _HomePageState extends State<HomePage> {
   bool get _isTaskTab => _selectedIndex == (_isAdmin ? 2 : 0);
 
   bool get _showTaskDetailHeader => _isTaskTab && _taskDetailTask != null;
+
+  bool get _canEditTask => _role == UserRole.admin || _role == UserRole.qc;
+
+  bool get _canDeleteTaskEntry => _role == UserRole.admin;
+
+  bool _canEditTaskEntry(_TaskEntry entry) {
+    return (_role == UserRole.admin || _role == UserRole.qc) &&
+        entry.status == _TaskStatus.pending;
+  }
 
   String get _headerTitle {
     if (_showTaskDetailHeader) {
@@ -130,11 +140,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final showSubmitProof =
-        !_isAdmin && _selectedIndex == 0 && _selectedTaskEntry != null;
-    final showReviewSubmission =
-        _reviewTaskEntry != null &&
-        (_isAdmin ? _selectedIndex == 2 : _selectedIndex == 0);
+    final showSubmitProof = _isTaskTab && _selectedTaskEntry != null;
+    final showReviewSubmission = _isTaskTab && _reviewTaskEntry != null;
     final showCreateTask =
         _showCreateTask &&
         (_isAdmin ? _selectedIndex == 2 : _selectedIndex == 0);
@@ -176,19 +183,69 @@ class _HomePageState extends State<HomePage> {
             : showReviewSubmission
             ? ReviewSubmissionPage(
                 taskTitle: _reviewTaskEntry!.task.title,
+                startTimeLabel: _reviewTaskEntry!.startTimeLabel,
+                dueTimeLabel: _reviewTaskEntry!.timeLabel,
                 submittedTimeLabel: _reviewTaskEntry!.submittedTimeLabel,
-                showOperatorDetails: _role != UserRole.operator,
-                showQcFeedback: _role != UserRole.operator,
-                showReviewActions: _role != UserRole.operator,
+                statusLabel: _statusStyle(_reviewTaskEntry!.status).label,
+                statusBackgroundColor: _statusStyle(
+                  _reviewTaskEntry!.status,
+                ).backgroundColor,
+                statusForegroundColor: _statusStyle(
+                  _reviewTaskEntry!.status,
+                ).foregroundColor,
+                operatorName: _reviewTaskEntry!.assignedUserLabel,
+                operatorEmployeeId: _reviewTaskEntry!.assignedEmployeeLabel,
                 operatorRemarks: _reviewTaskEntry!.submissionRemark,
                 qcFeedback: _reviewTaskEntry!.reviewRemark,
+                submittedEvidence: _reviewTaskEntry!.evidence,
+                onEditEntry: _canEditTaskEntry(_reviewTaskEntry!)
+                    ? () => _editTaskEntry(_reviewTaskEntry!)
+                    : null,
+                onDeleteEntry: _canDeleteTaskEntry
+                    ? () => _confirmAndDeleteTaskEntry(_reviewTaskEntry!)
+                    : null,
+                showReviewActions:
+                    _role != UserRole.operator &&
+                    _reviewTaskEntry!.status == _TaskStatus.submitted,
                 onBack: () => setState(() => _reviewTaskEntry = null),
               )
             : showSubmitProof
             ? SubmitProofPage(
                 taskTitle: _selectedTaskEntry!.task.title,
+                startTimeLabel: _selectedTaskEntry!.startTimeLabel,
                 taskTimeLabel: _selectedTaskEntry!.timeLabel,
+                assignedUserName: _selectedTaskEntry!.assignedUserLabel,
+                assignedEmployeeId: _selectedTaskEntry!.assignedEmployeeLabel,
+                statusLabel: _statusStyle(_selectedTaskEntry!.status).label,
+                statusBackgroundColor: _statusStyle(
+                  _selectedTaskEntry!.status,
+                ).backgroundColor,
+                statusForegroundColor: _statusStyle(
+                  _selectedTaskEntry!.status,
+                ).foregroundColor,
+                showReviewerFeedback:
+                    _selectedTaskEntry!.status == _TaskStatus.approved ||
+                    _selectedTaskEntry!.status == _TaskStatus.rejected ||
+                    _selectedTaskEntry!.status == _TaskStatus.failed,
+                operatorRemarks: _selectedTaskEntry!.submissionRemark,
+                reviewerFeedback: _selectedTaskEntry!.reviewRemark,
+                submittedEvidence: _selectedTaskEntry!.evidence,
+                canSubmit:
+                    _selectedTaskEntry!.status == _TaskStatus.pending &&
+                    _selectedTaskEntry!.userId == widget.userId,
+                accessToken: widget.accessToken,
+                entryId: _selectedTaskEntry!.id,
                 onBack: () => setState(() => _selectedTaskEntry = null),
+                onSubmitted: () => setState(() {
+                  _selectedTaskEntry = null;
+                  _taskRefreshRevision++;
+                }),
+                onEditEntry: _canEditTaskEntry(_selectedTaskEntry!)
+                    ? () => _editTaskEntry(_selectedTaskEntry!)
+                    : null,
+                onDeleteEntry: _canDeleteTaskEntry
+                    ? () => _confirmAndDeleteTaskEntry(_selectedTaskEntry!)
+                    : null,
               )
             : Column(
                 children: [
@@ -202,14 +259,14 @@ class _HomePageState extends State<HomePage> {
                     onBack: _showTaskDetailHeader
                         ? () => setState(() => _taskDetailTask = null)
                         : null,
-                    onTaskEdit: _showTaskDetailHeader
+                    onTaskEdit: _showTaskDetailHeader && _canEditTask
                         ? () => setState(() {
                             _editingTask = _taskDetailTask;
                             _showCreateTask = true;
                           })
                         : null,
                     onTaskDelete: _showTaskDetailHeader && _isAdmin
-                        ? () => _showTaskAction('Delete')
+                        ? _confirmAndDeleteTask
                         : null,
                   ),
                   Expanded(
@@ -217,13 +274,17 @@ class _HomePageState extends State<HomePage> {
                       index: _selectedIndex,
                       children: _isAdmin
                           ? [
-                              const _AdminDashboardView(),
+                              _AdminDashboardView(
+                                accessToken: widget.accessToken,
+                                isActive: _selectedIndex == 0,
+                              ),
                               _AdminUsersView(
                                 accessToken: widget.accessToken,
                                 isActive: _selectedIndex == 1,
                               ),
                               _TaskHomeView(
                                 role: _role,
+                                currentUserId: widget.userId,
                                 accessToken: widget.accessToken,
                                 refreshRevision: _taskRefreshRevision,
                                 selectedTask: _taskDetailTask,
@@ -238,11 +299,30 @@ class _HomePageState extends State<HomePage> {
                                   _showCreateTask = true;
                                 }),
                                 onSubmittedTaskEntrySelected: (entry) =>
-                                    setState(() => _reviewTaskEntry = entry),
+                                    _openTaskEntry(entry),
+                                onPendingTaskEntrySelected: (entry) =>
+                                    _openTaskEntry(entry),
                               ),
-                              const _PlaceholderView(
-                                icon: Icons.notifications_rounded,
-                                title: 'Notification',
+                              _NotificationView(
+                                role: _role,
+                                userId: widget.userId,
+                                accessToken: widget.accessToken,
+                                isActive: _selectedIndex == 3,
+                                onTaskSelected: (task) => setState(() {
+                                  _selectedIndex = 2;
+                                  _taskDetailTask = task;
+                                }),
+                                onEntrySelected: (entry) => setState(() {
+                                  _selectedIndex = 2;
+                                  _selectedTaskEntry = null;
+                                  _reviewTaskEntry = null;
+                                  if (_role != UserRole.operator &&
+                                      entry.status == _TaskStatus.submitted) {
+                                    _reviewTaskEntry = entry;
+                                    return;
+                                  }
+                                  _selectedTaskEntry = entry;
+                                }),
                               ),
                               _ProfileView(
                                 isActive: _selectedIndex == 4,
@@ -261,6 +341,7 @@ class _HomePageState extends State<HomePage> {
                           : [
                               _TaskHomeView(
                                 role: _role,
+                                currentUserId: widget.userId,
                                 accessToken: widget.accessToken,
                                 refreshRevision: _taskRefreshRevision,
                                 selectedTask: _taskDetailTask,
@@ -274,18 +355,31 @@ class _HomePageState extends State<HomePage> {
                                         _showCreateTask = true;
                                       })
                                     : null,
-                                onPendingTaskEntrySelected:
-                                    _role == UserRole.operator
-                                    ? (entry) => setState(
-                                        () => _selectedTaskEntry = entry,
-                                      )
-                                    : null,
+                                onPendingTaskEntrySelected: (entry) =>
+                                    _openTaskEntry(entry),
                                 onSubmittedTaskEntrySelected: (entry) =>
-                                    setState(() => _reviewTaskEntry = entry),
+                                    _openTaskEntry(entry),
                               ),
-                              const _PlaceholderView(
-                                icon: Icons.notifications_rounded,
-                                title: 'Notification',
+                              _NotificationView(
+                                role: _role,
+                                userId: widget.userId,
+                                accessToken: widget.accessToken,
+                                isActive: _selectedIndex == 1,
+                                onTaskSelected: (task) => setState(() {
+                                  _selectedIndex = 0;
+                                  _taskDetailTask = task;
+                                }),
+                                onEntrySelected: (entry) => setState(() {
+                                  _selectedIndex = 0;
+                                  _selectedTaskEntry = null;
+                                  _reviewTaskEntry = null;
+                                  if (_role != UserRole.operator &&
+                                      entry.status == _TaskStatus.submitted) {
+                                    _reviewTaskEntry = entry;
+                                    return;
+                                  }
+                                  _selectedTaskEntry = entry;
+                                }),
                               ),
                               _ProfileView(
                                 isActive: _selectedIndex == 2,
@@ -344,10 +438,249 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _showTaskAction(String action) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$action task selected.')));
+  void _openTaskEntry(_TaskEntry entry) {
+    setState(() {
+      _selectedTaskEntry = null;
+      _reviewTaskEntry = null;
+
+      if (_role != UserRole.operator && entry.status == _TaskStatus.submitted) {
+        _reviewTaskEntry = entry;
+        return;
+      }
+
+      _selectedTaskEntry = entry;
+    });
+  }
+
+  Future<void> _editTaskEntry(_TaskEntry entry) async {
+    final updated = await showGeneralDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      barrierDismissible: false,
+      barrierLabel: 'Edit task entry',
+      transitionDuration: const Duration(milliseconds: 260),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return _AddTaskEntryDialog(
+          taskId: entry.task.id,
+          accessToken: widget.accessToken,
+          currentUserId: widget.userId,
+          currentUserRole: _role,
+          defaultUserId: entry.task.userId,
+          taskStartAt: entry.task.recurrenceStartAt,
+          initialValues: _TaskEntryEditValues(
+            entryId: entry.id,
+            userId: entry.userId,
+            startAt: entry.startAt,
+            dueAt: entry.dueAt,
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curvedAnimation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.06),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: child,
+          ),
+        );
+      },
+    );
+
+    if (updated == true && mounted) {
+      setState(() {
+        _selectedTaskEntry = null;
+        _reviewTaskEntry = null;
+        _taskRefreshRevision++;
+      });
+    }
+  }
+
+  Future<void> _confirmAndDeleteTaskEntry(_TaskEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF303030),
+          title: const Text(
+            'Delete task entry?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+          content: Text(
+            'Deleting this task entry will permanently remove it from "${entry.task.title}".',
+            style: const TextStyle(color: Color(0xFFEAEAEA)),
+          ),
+          actions: [
+            SizedBox(
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white, width: 2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6B6B),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+                child: const Text('Delete'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      final message = await _taskApi.deleteTaskEntry(
+        entryId: entry.id,
+        accessToken: widget.accessToken,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _selectedTaskEntry = null;
+        _reviewTaskEntry = null;
+        _taskRefreshRevision++;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<void> _confirmAndDeleteTask() async {
+    final task = _taskDetailTask;
+    if (task == null) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF303030),
+          title: const Text(
+            'Delete task?',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+          content: Text(
+            'Deleting "${task.title}" will permanently remove the task and all task entries under it.',
+            style: const TextStyle(color: Color(0xFFEAEAEA)),
+          ),
+          actions: [
+            SizedBox(
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white, width: 2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+                child: const Text('Cancel'),
+              ),
+            ),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6B6B),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                  ),
+                ),
+                child: const Text('Delete'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      final message = await _taskApi.deleteTask(
+        taskId: task.id,
+        accessToken: widget.accessToken,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _taskDetailTask = null;
+        _taskRefreshRevision++;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 }
 

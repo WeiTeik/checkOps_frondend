@@ -3,6 +3,7 @@ part of '../home_page.dart';
 class _TaskHomeView extends StatefulWidget {
   const _TaskHomeView({
     required this.role,
+    required this.currentUserId,
     required this.accessToken,
     required this.refreshRevision,
     required this.selectedTask,
@@ -16,6 +17,7 @@ class _TaskHomeView extends StatefulWidget {
   });
 
   final UserRole role;
+  final int currentUserId;
   final String accessToken;
   final int refreshRevision;
   final _Task? selectedTask;
@@ -52,7 +54,6 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
     if (oldWidget.accessToken != widget.accessToken ||
         oldWidget.role != widget.role ||
         oldWidget.refreshRevision != widget.refreshRevision) {
-      widget.onTaskDetailBack();
       _loadTasks();
     }
   }
@@ -69,7 +70,7 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
     return Future.wait(
       tasks.map((task) async {
         final now = DateTime.now();
-        final entryPayloads = await _taskApi.getTaskEntries(
+        final entryPayloads = await _taskApi.getTaskEntriesLite(
           taskId: task.id,
           accessToken: widget.accessToken,
         );
@@ -162,8 +163,8 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
   }
 
   void _refreshTasks() {
+    widget.onTaskDetailBack();
     setState(() {
-      widget.onTaskDetailBack();
       _loadTasks();
     });
   }
@@ -175,6 +176,7 @@ class _TaskHomeViewState extends State<_TaskHomeView> {
         task: widget.selectedTask!,
         accessToken: widget.accessToken,
         role: widget.role,
+        currentUserId: widget.currentUserId,
         onPendingTaskEntrySelected: widget.onPendingTaskEntrySelected,
         onSubmittedTaskEntrySelected: widget.onSubmittedTaskEntrySelected,
       );
@@ -269,6 +271,7 @@ class _TaskEntryListView extends StatefulWidget {
     required this.task,
     required this.accessToken,
     required this.role,
+    required this.currentUserId,
     this.onPendingTaskEntrySelected,
     this.onSubmittedTaskEntrySelected,
   });
@@ -276,6 +279,7 @@ class _TaskEntryListView extends StatefulWidget {
   final _Task task;
   final String accessToken;
   final UserRole role;
+  final int currentUserId;
   final ValueChanged<_TaskEntry>? onPendingTaskEntrySelected;
   final ValueChanged<_TaskEntry>? onSubmittedTaskEntrySelected;
 
@@ -305,7 +309,7 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
 
   Future<_TaskDetailData> _loadTaskDetail() async {
     final results = await Future.wait<Object>([
-      _taskApi.getTaskEntries(
+      _taskApi.getTaskEntriesLite(
         taskId: widget.task.id,
         accessToken: widget.accessToken,
       ),
@@ -316,17 +320,92 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
     ]);
     final entryPayloads = results[0] as List<Map<String, dynamic>>;
     final userPayload = results[1] as Map<String, dynamic>;
+    final assignedUserName =
+        userPayload['name']?.toString() ?? 'User #${widget.task.userId}';
+    final assignedEmployeeId =
+        userPayload['employee_id']?.toString() ??
+        userPayload['employeeId']?.toString() ??
+        '';
+    final parsedEntries = entryPayloads
+        .map((entry) => _TaskEntry.fromJson(entry, widget.task))
+        .toList();
+    final userPayloadsById = <int, Map<String, dynamic>>{
+      widget.task.userId: userPayload,
+    };
+    final missingUserIds = parsedEntries
+        .map((entry) => entry.userId)
+        .where((userId) => !userPayloadsById.containsKey(userId))
+        .toSet();
+    final missingUserPayloads = await Future.wait(
+      missingUserIds.map((userId) async {
+        final payload = await _userApi.getUser(
+          userId: userId,
+          accessToken: widget.accessToken,
+        );
+        return MapEntry(userId, payload);
+      }),
+    );
+    userPayloadsById.addEntries(missingUserPayloads);
+
     return _TaskDetailData(
-      assignedUserName:
-          userPayload['name']?.toString() ?? 'User #${widget.task.userId}',
-      entries: entryPayloads
-          .map((entry) => _TaskEntry.fromJson(entry, widget.task))
+      assignedUserName: assignedUserName,
+      assignedEmployeeId: assignedEmployeeId,
+      entries: parsedEntries
+          .map(
+            (entry) =>
+                entry.withAssigneeFromUser(userPayloadsById[entry.userId]),
+          )
           .toList(),
     );
   }
 
   void _refreshDetail() {
     setState(_loadDetail);
+  }
+
+  Future<void> _openEntry(_TaskEntry entry) async {
+    try {
+      final fullEntry = await _loadFullEntry(entry);
+      if (!mounted) {
+        return;
+      }
+      if (fullEntry.status == _TaskStatus.submitted) {
+        widget.onSubmittedTaskEntrySelected?.call(fullEntry);
+        return;
+      }
+      widget.onPendingTaskEntrySelected?.call(fullEntry);
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  Future<_TaskEntry> _loadFullEntry(_TaskEntry liteEntry) async {
+    final entryPayloads = await _taskApi.getTaskEntries(
+      taskId: widget.task.id,
+      accessToken: widget.accessToken,
+    );
+    _TaskEntry? fullEntry;
+    for (final entryPayload in entryPayloads) {
+      final entry = _TaskEntry.fromJson(entryPayload, widget.task);
+      if (entry.id == liteEntry.id) {
+        fullEntry = entry;
+        break;
+      }
+    }
+    if (fullEntry == null) {
+      return liteEntry;
+    }
+
+    final userPayload = await _userApi.getUser(
+      userId: fullEntry.userId,
+      accessToken: widget.accessToken,
+    );
+    return fullEntry.withAssigneeFromUser(userPayload);
   }
 
   List<_TaskEntry> _filteredEntries(List<_TaskEntry> entries) {
@@ -369,6 +448,8 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
         return _AddTaskEntryDialog(
           taskId: widget.task.id,
           accessToken: widget.accessToken,
+          currentUserId: widget.currentUserId,
+          currentUserRole: widget.role,
           defaultUserId: widget.task.userId,
           taskStartAt: widget.task.recurrenceStartAt,
         );
@@ -441,16 +522,7 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
   }
 
   VoidCallback? _entryTap(_TaskEntry entry) {
-    if (entry.status == _TaskStatus.pending) {
-      if (widget.role == UserRole.operator && entry.isAvailableForSubmission) {
-        return () => widget.onPendingTaskEntrySelected?.call(entry);
-      }
-      return null;
-    }
-    if (entry.status == _TaskStatus.submitted) {
-      return () => widget.onSubmittedTaskEntrySelected?.call(entry);
-    }
-    return null;
+    return () => _openEntry(entry);
   }
 
   @override
@@ -507,22 +579,11 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
                         padding: const EdgeInsets.only(bottom: 18),
                         child: Column(
                           children: [
-                            for (
-                              var index = 0;
-                              index < entries.length;
-                              index++
-                            ) ...[
+                            for (final entry in entries)
                               _TaskEntryTile(
-                                entry: entries[index],
-                                onTap: _entryTap(entries[index]),
+                                entry: entry,
+                                onTap: _entryTap(entry),
                               ),
-                              if (index != entries.length - 1)
-                                const Divider(
-                                  height: 1,
-                                  thickness: 1.5,
-                                  color: Color(0xFF5F5F5F),
-                                ),
-                            ],
                           ],
                         ),
                       ),
@@ -1226,14 +1287,20 @@ class _AddTaskEntryDialog extends StatefulWidget {
   const _AddTaskEntryDialog({
     required this.taskId,
     required this.accessToken,
+    required this.currentUserId,
+    required this.currentUserRole,
     required this.defaultUserId,
     required this.taskStartAt,
+    this.initialValues,
   });
 
   final int taskId;
   final String accessToken;
+  final int currentUserId;
+  final UserRole currentUserRole;
   final int defaultUserId;
   final DateTime taskStartAt;
+  final _TaskEntryEditValues? initialValues;
 
   @override
   State<_AddTaskEntryDialog> createState() => _AddTaskEntryDialogState();
@@ -1253,6 +1320,8 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
   bool _isSubmitting = false;
   String? _submitError;
 
+  bool get _isEditing => widget.initialValues != null;
+
   bool get _isComplete =>
       _selectedAssignee != null &&
       _startAt != null &&
@@ -1262,6 +1331,7 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
   @override
   void initState() {
     super.initState();
+    _loadInitialValues();
     _assigneesFuture = _loadAssignees();
   }
 
@@ -1272,6 +1342,17 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
     super.dispose();
   }
 
+  void _loadInitialValues() {
+    final values = widget.initialValues;
+    if (values == null) {
+      return;
+    }
+    _startAt = values.startAt;
+    _dueAt = values.dueAt;
+    _startController.text = _formatDateTime(values.startAt);
+    _dueController.text = _formatDateTime(values.dueAt);
+  }
+
   Future<List<_EntryAssignee>> _loadAssignees() async {
     final users = await _userApi.getUsers(
       accessToken: widget.accessToken,
@@ -1279,11 +1360,12 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
     );
     final assignees = users
         .map(_EntryAssignee.fromJson)
-        .where((user) => !user.isAdmin)
+        .where(_canAssignEntryTo)
         .toList();
+    final selectedUserId = widget.initialValues?.userId ?? widget.defaultUserId;
     _EntryAssignee? defaultAssignee;
     for (final assignee in assignees) {
-      if (assignee.id == widget.defaultUserId) {
+      if (assignee.id == selectedUserId) {
         defaultAssignee = assignee;
         break;
       }
@@ -1292,6 +1374,17 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
       setState(() => _selectedAssignee = defaultAssignee);
     }
     return assignees;
+  }
+
+  bool _canAssignEntryTo(_EntryAssignee user) {
+    if (widget.currentUserRole == UserRole.admin) {
+      return !user.isAdmin;
+    }
+    if (widget.currentUserRole == UserRole.qc) {
+      return user.id == widget.currentUserId ||
+          (user.isOperator && user.qcId == widget.currentUserId);
+    }
+    return false;
   }
 
   Future<void> _pickDateTime({required bool isStart}) async {
@@ -1532,19 +1625,33 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
 
     setState(() => _isSubmitting = true);
     try {
-      await _taskApi.createTaskEntry(
-        taskId: widget.taskId,
-        accessToken: widget.accessToken,
-        userId: _selectedAssignee!.id,
-        startAt: _startAt!,
-        dueAt: _dueAt!,
-      );
+      if (_isEditing) {
+        await _taskApi.updateTaskEntry(
+          entryId: widget.initialValues!.entryId,
+          accessToken: widget.accessToken,
+          userId: _selectedAssignee!.id,
+          startAt: _startAt!,
+          dueAt: _dueAt!,
+        );
+      } else {
+        await _taskApi.createTaskEntry(
+          taskId: widget.taskId,
+          accessToken: widget.accessToken,
+          userId: _selectedAssignee!.id,
+          startAt: _startAt!,
+          dueAt: _dueAt!,
+        );
+      }
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Task entry created.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isEditing ? 'Task entry updated.' : 'Task entry created.',
+          ),
+        ),
+      );
       Navigator.of(context).pop(true);
     } on AuthApiException catch (error) {
       if (!mounted) {
@@ -1590,12 +1697,12 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
                   iconSize: 32,
                 ),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Add Task Entry',
+                    _isEditing ? 'Edit Task Entry' : 'Add Task Entry',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 21,
                       fontWeight: FontWeight.w800,
@@ -1662,36 +1769,38 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
             const SizedBox(height: 34),
             SizedBox(
               width: double.infinity,
-              height: 52,
-              child: FilledButton(
+              height: 48,
+              child: OutlinedButton(
                 onPressed: _isSubmitting ? null : _submit,
-                style: FilledButton.styleFrom(
-                  backgroundColor: _isComplete
-                      ? const Color(0xFFD9D9D9)
-                      : const Color(0xFF8E8E8E),
-                  foregroundColor: _isComplete
-                      ? Colors.black
-                      : const Color(0xFF303030),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor: const Color(0xFF8E8E8E),
+                  side: BorderSide(
+                    color: _isSubmitting
+                        ? const Color(0xFF8E8E8E)
+                        : Colors.white,
+                    width: 2,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   textStyle: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                     letterSpacing: 0,
                   ),
                 ),
                 child: _isSubmitting
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                        width: 20,
+                        height: 20,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFF303030),
+                          strokeWidth: 2.4,
+                          color: Colors.white,
                         ),
                       )
-                    : const Text(
-                        'Create Entry',
+                    : Text(
+                        _isEditing ? 'Save Entry' : 'Create Entry',
                         overflow: TextOverflow.ellipsis,
                       ),
               ),
@@ -1701,6 +1810,20 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
       ),
     );
   }
+}
+
+class _TaskEntryEditValues {
+  const _TaskEntryEditValues({
+    required this.entryId,
+    required this.userId,
+    required this.startAt,
+    required this.dueAt,
+  });
+
+  final int entryId;
+  final int userId;
+  final DateTime startAt;
+  final DateTime dueAt;
 }
 
 class _TaskEntryDateTimeField extends StatelessWidget {
@@ -2492,17 +2615,6 @@ class _TaskEntryTile extends StatelessWidget {
                 _StatusPill(status: entry.status),
               ],
             ),
-            if (onTap != null) ...[
-              const SizedBox(height: 12),
-              const Align(
-                alignment: Alignment.centerRight,
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFFC7C7C7),
-                  size: 24,
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -2592,10 +2704,12 @@ enum _TaskStatus { pending, submitted, failed, approved, rejected, expired }
 class _TaskDetailData {
   const _TaskDetailData({
     required this.assignedUserName,
+    required this.assignedEmployeeId,
     required this.entries,
   });
 
   final String assignedUserName;
+  final String assignedEmployeeId;
   final List<_TaskEntry> entries;
 }
 
@@ -2683,6 +2797,7 @@ class _TaskEntry {
   const _TaskEntry({
     required this.id,
     required this.task,
+    required this.userId,
     required this.startAt,
     required this.dueAt,
     required this.status,
@@ -2690,12 +2805,17 @@ class _TaskEntry {
     required this.submissionRemark,
     required this.reviewRemark,
     required this.submittedAt,
+    required this.reviewedAt,
+    required this.assignedUserName,
+    required this.assignedEmployeeId,
+    required this.evidence,
   });
 
   factory _TaskEntry.fromJson(Map<String, dynamic> json, _Task task) {
     return _TaskEntry(
       id: _intFrom(json['id']),
       task: task,
+      userId: _intFrom(json['user_id'] ?? task.userId),
       startAt: _dateFrom(json['start_at']),
       dueAt: _dateFrom(json['due_at']),
       status: _statusFrom(json['status']),
@@ -2703,11 +2823,16 @@ class _TaskEntry {
       submissionRemark: json['submission_remark']?.toString() ?? '',
       reviewRemark: json['review_remark']?.toString() ?? '',
       submittedAt: _nullableDateFrom(json['submitted_at']),
+      reviewedAt: _nullableDateFrom(json['reviewed_at']),
+      assignedUserName: json['assigned_user_name']?.toString(),
+      assignedEmployeeId: json['assigned_employee_id']?.toString(),
+      evidence: _proofEvidenceFromValue(json['evidence']),
     );
   }
 
   final int id;
   final _Task task;
+  final int userId;
   final DateTime startAt;
   final DateTime dueAt;
   final _TaskStatus status;
@@ -2715,10 +2840,51 @@ class _TaskEntry {
   final String submissionRemark;
   final String reviewRemark;
   final DateTime? submittedAt;
+  final DateTime? reviewedAt;
+  final String? assignedUserName;
+  final String? assignedEmployeeId;
+  final List<ProofEvidence> evidence;
 
   String get timeLabel => _formatDateTime(dueAt);
   String get startTimeLabel => _formatDateTime(startAt);
   String get submittedTimeLabel => _formatDateTime(submittedAt ?? dueAt);
+  String get assignedUserLabel => assignedUserName ?? 'User #$userId';
+  String get assignedEmployeeLabel {
+    final employeeId = assignedEmployeeId;
+    return employeeId == null || employeeId.isEmpty ? '-' : employeeId;
+  }
+
+  _TaskEntry withAssignee({required String name, required String employeeId}) {
+    return _TaskEntry(
+      id: id,
+      task: task,
+      userId: userId,
+      startAt: startAt,
+      dueAt: dueAt,
+      status: status,
+      isAvailableForSubmission: isAvailableForSubmission,
+      submissionRemark: submissionRemark,
+      reviewRemark: reviewRemark,
+      submittedAt: submittedAt,
+      reviewedAt: reviewedAt,
+      assignedUserName: name,
+      assignedEmployeeId: employeeId,
+      evidence: evidence,
+    );
+  }
+
+  _TaskEntry withAssigneeFromUser(Map<String, dynamic>? userPayload) {
+    if (userPayload == null) {
+      return this;
+    }
+    return withAssignee(
+      name: userPayload['name']?.toString() ?? 'User #$userId',
+      employeeId:
+          userPayload['employee_id']?.toString() ??
+          userPayload['employeeId']?.toString() ??
+          '',
+    );
+  }
 
   bool isCurrentActiveCycleEntry(DateTime now) {
     final isActiveStatus =
@@ -2759,6 +2925,7 @@ class _EntryAssignee {
     required this.name,
     required this.employeeId,
     required this.role,
+    required this.qcId,
   });
 
   factory _EntryAssignee.fromJson(Map<String, dynamic> json) {
@@ -2767,6 +2934,7 @@ class _EntryAssignee {
       name: json['name']?.toString() ?? 'User',
       employeeId: json['employee_id']?.toString() ?? '',
       role: json['role']?.toString() ?? '',
+      qcId: _nullableIntFrom(json['qc_id'] ?? json['qcId']),
     );
   }
 
@@ -2774,6 +2942,7 @@ class _EntryAssignee {
   final String name;
   final String employeeId;
   final String role;
+  final int? qcId;
 
   String get label {
     return name;
@@ -2785,6 +2954,10 @@ class _EntryAssignee {
 
   bool get isAdmin {
     return role.trim().toLowerCase() == 'admin';
+  }
+
+  bool get isOperator {
+    return role.trim().toLowerCase() == 'operator';
   }
 }
 
@@ -2847,6 +3020,54 @@ _TaskStatus _statusFrom(Object? value) {
   };
 }
 
+List<ProofEvidence> _proofEvidenceFromValue(Object? value) {
+  if (value == null) {
+    return const [];
+  }
+
+  Object? decoded = value;
+  if (value is String) {
+    if (value.trim().isEmpty) {
+      return const [];
+    }
+    try {
+      decoded = jsonDecode(value);
+    } on FormatException {
+      return const [];
+    }
+  }
+
+  if (decoded is! List) {
+    return const [];
+  }
+
+  final evidence = <ProofEvidence>[];
+  for (final item in decoded) {
+    if (item is! Map) {
+      continue;
+    }
+    final data = item['data']?.toString();
+    if (data == null || data.isEmpty) {
+      continue;
+    }
+    try {
+      final mediaType = item['media_type']?.toString().toLowerCase() == 'video'
+          ? EvidenceMediaType.video
+          : EvidenceMediaType.image;
+      evidence.add(
+        ProofEvidence(
+          name: item['filename']?.toString() ?? 'Evidence',
+          bytes: base64Decode(data),
+          mediaType: mediaType,
+        ),
+      );
+    } on FormatException {
+      continue;
+    }
+  }
+  return evidence;
+}
+
 DateTime _dateFrom(Object? value) {
   return _nullableDateFrom(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
 }
@@ -2863,6 +3084,16 @@ int _intFrom(Object? value) {
     return value;
   }
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+int? _nullableIntFrom(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is int) {
+    return value;
+  }
+  return int.tryParse(value.toString());
 }
 
 String _formatDateTime(DateTime value) {

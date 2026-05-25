@@ -59,7 +59,7 @@ class TaskApi {
     required bool isActive,
   }) async {
     final body = await _authApi.request(
-      method: 'PUT',
+      method: 'PATCH',
       path: '/tasks/$taskId',
       payload: {
         'name': name,
@@ -81,6 +81,18 @@ class TaskApi {
       return task;
     }
     return <String, dynamic>{};
+  }
+
+  Future<String> deleteTask({
+    required int taskId,
+    required String accessToken,
+  }) async {
+    final body = await _authApi.request(
+      method: 'DELETE',
+      path: '/tasks/$taskId',
+      bearerToken: accessToken,
+    );
+    return body['message']?.toString() ?? 'Task deleted successfully.';
   }
 
   Future<List<Map<String, dynamic>>> getTasks({
@@ -147,6 +159,38 @@ class TaskApi {
     return const [];
   }
 
+  Future<List<Map<String, dynamic>>> getTaskEntriesLite({
+    required int taskId,
+    required String accessToken,
+    String? status,
+    DateTime? dueFrom,
+    DateTime? dueTo,
+  }) async {
+    final query = <String, String>{
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (dueFrom != null) 'due_from': dueFrom.toIso8601String(),
+      if (dueTo != null) 'due_to': dueTo.toIso8601String(),
+    };
+    final path = Uri(
+      path: '/tasks/$taskId/entries/lite',
+      queryParameters: query.isEmpty ? null : query,
+    ).toString();
+
+    final body = await _authApi.request(
+      method: 'GET',
+      path: path,
+      bearerToken: accessToken,
+    );
+    final entries = body['entries'];
+    if (entries is List) {
+      return entries
+          .whereType<Map>()
+          .map((entry) => Map<String, dynamic>.from(entry))
+          .toList();
+    }
+    return const [];
+  }
+
   Future<Map<String, dynamic>> createTaskEntry({
     required int taskId,
     required String accessToken,
@@ -170,5 +214,61 @@ class TaskApi {
       return entry;
     }
     return <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> updateTaskEntry({
+    required int entryId,
+    required String accessToken,
+    required int userId,
+    required DateTime startAt,
+    required DateTime dueAt,
+  }) async {
+    final body = await _authApi.request(
+      method: 'PATCH',
+      path: '/tasks/entries/$entryId',
+      payload: {
+        'user_id': userId,
+        'start_at': startAt.toIso8601String(),
+        'due_at': dueAt.toIso8601String(),
+      },
+      bearerToken: accessToken,
+    );
+    final entry = body['entry'];
+    if (entry is Map<String, dynamic>) {
+      return entry;
+    }
+    return <String, dynamic>{};
+  }
+
+  Future<String> deleteTaskEntry({
+    required int entryId,
+    required String accessToken,
+  }) async {
+    final body = await _authApi.request(
+      method: 'DELETE',
+      path: '/tasks/entries/$entryId',
+      bearerToken: accessToken,
+    );
+    return body['message']?.toString() ?? 'Task entry deleted successfully.';
+  }
+
+  Future<String> submitTaskEntry({
+    required int entryId,
+    required String accessToken,
+    required String status,
+    required String submissionRemark,
+    required String evidence,
+  }) async {
+    final body = await _authApi.request(
+      method: 'PATCH',
+      path: '/tasks/entries/$entryId',
+      payload: {
+        'status': status,
+        'submission_remark': submissionRemark,
+        'evidence': evidence,
+      },
+      bearerToken: accessToken,
+    );
+    return body['message']?.toString() ?? 'Proof submitted.';
   }
 }

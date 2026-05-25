@@ -88,6 +88,7 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
   DateTime? _recurrenceStartAt;
   _TaskRecurrence _recurrence = _TaskRecurrence.once;
   _IntervalUnit _dueIntervalUnit = _IntervalUnit.day;
+  bool _isActive = true;
   bool _showErrors = false;
   bool _isSubmitting = false;
   String? _submitError;
@@ -167,6 +168,7 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
     _dueIntervalController.text = values.dueInterval.toString();
     _recurrenceStartAt = values.recurrenceStartAt;
     _startTimeController.text = _formatDateTime(values.recurrenceStartAt);
+    _isActive = values.isActive;
     _recurrence = switch (values.recurrenceType.trim().toLowerCase()) {
       'recurring' => _TaskRecurrence.daily,
       'daily' => _TaskRecurrence.daily,
@@ -484,7 +486,7 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
           recurrenceStartAt: _recurrenceStartAt!,
           dueInterval: _dueInterval,
           dueIntervalUnit: _dueIntervalUnit.backendValue,
-          isActive: widget.initialValues!.isActive,
+          isActive: _isActive,
         );
       } else {
         await _taskApi.createTask(
@@ -662,6 +664,40 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
                   ),
                 ],
               ),
+              if (_isEditing) ...[
+                const SizedBox(height: 24),
+                const _CreateTaskSubheading(title: 'Task Status'),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _TaskStatusChoice(
+                        label: 'Active',
+                        icon: Icons.check_circle_rounded,
+                        selected: _isActive,
+                        selectedColor: const Color(0xFF7CFF8A),
+                        selectedTextColor: const Color(0xFF008F13),
+                        onPressed: _isSubmitting
+                            ? null
+                            : () => setState(() => _isActive = true),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _TaskStatusChoice(
+                        label: 'Inactive',
+                        icon: Icons.pause_circle_filled_rounded,
+                        selected: !_isActive,
+                        selectedColor: const Color(0xFFFFD59B),
+                        selectedTextColor: const Color(0xFFFF8B2C),
+                        onPressed: _isSubmitting
+                            ? null
+                            : () => setState(() => _isActive = false),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (_submitError != null) ...[
                 const SizedBox(height: 20),
                 Text(
@@ -677,31 +713,40 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
               const SizedBox(height: 34),
               SizedBox(
                 width: double.infinity,
-                height: 52,
-                child: FilledButton.icon(
+                height: 48,
+                child: OutlinedButton(
                   onPressed: _isSubmitting ? null : _validateAndCreateTask,
-                  label: Text(
-                    _isSubmitting
-                        ? (_isEditing ? 'Saving...' : 'Creating...')
-                        : (_isEditing ? 'Save Task' : 'Create Task'),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _isComplete
-                        ? const Color(0xFFD9D9D9)
-                        : const Color(0xFF8E8E8E),
-                    foregroundColor: _isComplete
-                        ? Colors.black
-                        : const Color(0xFF303030),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    disabledForegroundColor: const Color(0xFF8E8E8E),
+                    side: BorderSide(
+                      color: _isSubmitting
+                          ? const Color(0xFF8E8E8E)
+                          : Colors.white,
+                      width: 2,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     textStyle: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: 0,
                     ),
                   ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.4,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          _isEditing ? 'Save Task' : 'Create Task',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                 ),
               ),
             ],
@@ -1172,6 +1217,72 @@ class _RecurrenceChip extends StatelessWidget {
           padding: EdgeInsets.zero,
         ),
         child: Text(label, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
+}
+
+class _CreateTaskSubheading extends StatelessWidget {
+  const _CreateTaskSubheading({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0,
+      ),
+    );
+  }
+}
+
+class _TaskStatusChoice extends StatelessWidget {
+  const _TaskStatusChoice({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.selectedColor,
+    required this.selectedTextColor,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color selectedColor;
+  final Color selectedTextColor;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 21),
+        label: Text(label, overflow: TextOverflow.ellipsis),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: selected ? selectedColor : const Color(0xFF333333),
+          foregroundColor: selected ? selectedTextColor : Colors.white,
+          disabledForegroundColor: const Color(0xFF8E8E8E),
+          side: BorderSide(
+            color: selected ? selectedColor : const Color(0xFF5A5A5A),
+            width: 1.5,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0,
+          ),
+        ),
       ),
     );
   }

@@ -1,99 +1,300 @@
 part of '../general/home_page.dart';
 
-class _AdminDashboardView extends StatelessWidget {
-  const _AdminDashboardView();
+class _AdminDashboardView extends StatefulWidget {
+  const _AdminDashboardView({
+    required this.accessToken,
+    required this.isActive,
+  });
+
+  final String accessToken;
+  final bool isActive;
+
+  @override
+  State<_AdminDashboardView> createState() => _AdminDashboardViewState();
+}
+
+class _AdminDashboardViewState extends State<_AdminDashboardView> {
+  final _taskApi = TaskApi();
+  Future<_AdminDashboardData>? _dashboardFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboard();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AdminDashboardView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.accessToken != widget.accessToken ||
+        (widget.isActive && !oldWidget.isActive)) {
+      _loadDashboard();
+    }
+  }
+
+  void _loadDashboard() {
+    _dashboardFuture = _loadDashboardData();
+  }
+
+  Future<void> _refreshDashboard() async {
+    setState(_loadDashboard);
+    await _dashboardFuture;
+  }
+
+  Future<_AdminDashboardData> _loadDashboardData() async {
+    final taskPayloads = await _taskApi.getTasks(
+      accessToken: widget.accessToken,
+    );
+    final tasks = taskPayloads.map(_Task.fromJson).toList();
+    final nestedEntries = await Future.wait(
+      tasks.map((task) async {
+        final entryPayloads = await _taskApi.getTaskEntries(
+          taskId: task.id,
+          accessToken: widget.accessToken,
+        );
+        return entryPayloads
+            .map((entry) => _TaskEntry.fromJson(entry, task))
+            .toList();
+      }),
+    );
+    final entries = nestedEntries.expand((entries) => entries).toList();
+    return _AdminDashboardData.fromEntries(entries);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: const [
-        Padding(
-          padding: EdgeInsets.fromLTRB(20, 22, 20, 16),
-          child: Column(
+    return FutureBuilder<_AdminDashboardData>(
+      future: _dashboardFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF8EDCFF)),
+          );
+        }
+        if (snapshot.hasError && !snapshot.hasData) {
+          return _TaskErrorView(
+            message: _errorMessage(snapshot.error),
+            onRetry: _refreshDashboard,
+          );
+        }
+
+        final data = snapshot.data ?? _AdminDashboardData.empty();
+        return RefreshIndicator(
+          color: const Color(0xFF67D8FF),
+          backgroundColor: const Color(0xFF303030),
+          onRefresh: _refreshDashboard,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _AdminMetricCard(
-                      value: '3',
-                      label: 'Pending',
-                      color: Color(0xFFFF8B2C),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _AdminMetricCard(
+                            value: data.countFor(_TaskStatus.pending),
+                            label: 'Pending',
+                            color: const Color(0xFFFF8B2C),
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: _AdminMetricCard(
+                            value: data.countFor(_TaskStatus.submitted),
+                            label: 'Submitted',
+                            color: const Color(0xFF00B316),
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: _AdminMetricCard(
+                            value: data.countFor(_TaskStatus.failed),
+                            label: 'Failed',
+                            color: const Color(0xFFFF1E1E),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  SizedBox(width: 18),
-                  Expanded(
-                    child: _AdminMetricCard(
-                      value: '2',
-                      label: 'Submitted',
-                      color: Color(0xFF00B316),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _AdminMetricCard(
+                            value: data.countFor(_TaskStatus.approved),
+                            label: 'Approved',
+                            color: const Color(0xFF00B316),
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: _AdminMetricCard(
+                            value: data.countFor(_TaskStatus.rejected),
+                            label: 'Rejected',
+                            color: const Color(0xFFFF1E1E),
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        Expanded(
+                          child: _AdminMetricCard(
+                            value: data.countFor(_TaskStatus.expired),
+                            label: 'Expired',
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  SizedBox(width: 18),
-                  Expanded(
-                    child: _AdminMetricCard(
-                      value: '1',
-                      label: 'Failed',
-                      color: Color(0xFFFF1E1E),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _AdminMetricCard(
-                      value: '3',
-                      label: 'Approved',
-                      color: Color(0xFF00B316),
-                    ),
-                  ),
-                  SizedBox(width: 18),
-                  Expanded(
-                    child: _AdminMetricCard(
-                      value: '2',
-                      label: 'Rejected',
-                      color: Color(0xFFFF1E1E),
-                    ),
-                  ),
-                  SizedBox(width: 18),
-                  Expanded(
-                    child: _AdminMetricCard(
-                      value: '1',
-                      label: 'Expired',
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
+              const _AdminOverviewHeader(),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: _AdminChartCard(
+                  axisLabel: 'Submissions',
+                  title: 'Operator Task Submission',
+                  accentColor: const Color(0xFF67D8FF),
+                  values: data.submissionValues,
+                  labels: data.dayLabels,
+                  tooltipLabels: data.dateLabels,
+                ),
               ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: _AdminChartCard(
+                  axisLabel: 'Reviews',
+                  title: 'Tasks Reviewed by QC',
+                  accentColor: const Color(0xFF7CFF8A),
+                  values: data.reviewValues,
+                  labels: data.dayLabels,
+                  tooltipLabels: data.dateLabels,
+                ),
+              ),
+              const SizedBox(height: 30),
             ],
           ),
-        ),
-        _AdminOverviewHeader(),
-        SizedBox(height: 16),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 18),
-          child: _AdminChartCard(
-            axisLabel: 'Submission',
-            title: 'Operator Task Submission',
-            accentColor: Color(0xFF67D8FF),
-            values: [0, 2, 1, 3.5, 2.8, 1, 4.2, 0, 1.8],
-          ),
-        ),
-        SizedBox(height: 16),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 18),
-          child: _AdminChartCard(
-            axisLabel: 'Reviews',
-            title: 'Tasks Reviewed by QC',
-            accentColor: Color(0xFF7CFF8A),
-            values: [0, 2, 1, 3.5, 2.8, 1, 4.2, 0, 1.8],
-          ),
-        ),
-        SizedBox(height: 30),
-      ],
+        );
+      },
     );
+  }
+}
+
+class _AdminDashboardData {
+  const _AdminDashboardData({
+    required this.statusCounts,
+    required this.submissionValues,
+    required this.reviewValues,
+    required this.dayLabels,
+    required this.dateLabels,
+  });
+
+  factory _AdminDashboardData.empty() {
+    final days = _recentDays();
+    return _AdminDashboardData(
+      statusCounts: const {},
+      submissionValues: List<double>.filled(days.length, 0),
+      reviewValues: List<double>.filled(days.length, 0),
+      dayLabels: days.map(_weekdayLabel).toList(),
+      dateLabels: days.map(_dateLabel).toList(),
+    );
+  }
+
+  factory _AdminDashboardData.fromEntries(List<_TaskEntry> entries) {
+    final counts = <_TaskStatus, int>{};
+    for (final status in _TaskStatus.values) {
+      counts[status] = 0;
+    }
+    for (final entry in entries) {
+      counts[entry.status] = (counts[entry.status] ?? 0) + 1;
+    }
+
+    final days = _recentDays();
+    final submissionCounts = List<int>.filled(days.length, 0);
+    final reviewCounts = List<int>.filled(days.length, 0);
+    for (final entry in entries) {
+      final submittedAt = entry.submittedAt;
+      if (submittedAt != null &&
+          (entry.status == _TaskStatus.submitted ||
+              entry.status == _TaskStatus.failed ||
+              entry.status == _TaskStatus.approved ||
+              entry.status == _TaskStatus.rejected)) {
+        final index = _dayIndex(days, submittedAt);
+        if (index != null) {
+          submissionCounts[index] += 1;
+        }
+      }
+
+      final reviewedAt = entry.reviewedAt;
+      if (reviewedAt != null &&
+          (entry.status == _TaskStatus.approved ||
+              entry.status == _TaskStatus.rejected)) {
+        final index = _dayIndex(days, reviewedAt);
+        if (index != null) {
+          reviewCounts[index] += 1;
+        }
+      }
+    }
+
+    return _AdminDashboardData(
+      statusCounts: counts,
+      submissionValues: submissionCounts
+          .map((value) => value.toDouble())
+          .toList(),
+      reviewValues: reviewCounts.map((value) => value.toDouble()).toList(),
+      dayLabels: days.map(_weekdayLabel).toList(),
+      dateLabels: days.map(_dateLabel).toList(),
+    );
+  }
+
+  final Map<_TaskStatus, int> statusCounts;
+  final List<double> submissionValues;
+  final List<double> reviewValues;
+  final List<String> dayLabels;
+  final List<String> dateLabels;
+
+  String countFor(_TaskStatus status) {
+    return (statusCounts[status] ?? 0).toString();
+  }
+
+  static List<DateTime> _recentDays() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return [
+      for (var offset = 6; offset >= 0; offset -= 1)
+        today.subtract(Duration(days: offset)),
+    ];
+  }
+
+  static int? _dayIndex(List<DateTime> days, DateTime value) {
+    final date = value.toLocal();
+    final day = DateTime(date.year, date.month, date.day);
+    for (var index = 0; index < days.length; index += 1) {
+      if (days[index] == day) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  static String _dateLabel(DateTime value) {
+    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+  }
+
+  static String _weekdayLabel(DateTime value) {
+    return switch (value.weekday) {
+      DateTime.monday => 'Mon',
+      DateTime.tuesday => 'Tue',
+      DateTime.wednesday => 'Wed',
+      DateTime.thursday => 'Thu',
+      DateTime.friday => 'Fri',
+      DateTime.saturday => 'Sat',
+      _ => 'Sun',
+    };
   }
 }
 
@@ -178,12 +379,16 @@ class _AdminChartCard extends StatefulWidget {
     required this.title,
     required this.accentColor,
     required this.values,
+    required this.labels,
+    required this.tooltipLabels,
   });
 
   final String axisLabel;
   final String title;
   final Color accentColor;
   final List<double> values;
+  final List<String> labels;
+  final List<String> tooltipLabels;
 
   @override
   State<_AdminChartCard> createState() => _AdminChartCardState();
@@ -226,7 +431,7 @@ class _AdminChartCardState extends State<_AdminChartCard> {
     for (var index = 0; index < widget.values.length; index += 1) {
       final x =
           plotRect.left + (index / (widget.values.length - 1)) * chartWidth;
-      final y = originY - (widget.values[index] / 4.5) * chartHeight;
+      final y = originY - (widget.values[index] / _maxValue) * chartHeight;
       final distance = (Offset(x, y) - position).distance;
       if (distance < nearestDistance) {
         nearestDistance = distance;
@@ -235,6 +440,14 @@ class _AdminChartCardState extends State<_AdminChartCard> {
     }
 
     return nearestDistance <= 24 ? nearestIndex : null;
+  }
+
+  double get _maxValue {
+    final highestValue = widget.values.fold<double>(
+      0,
+      (highest, value) => value > highest ? value : highest,
+    );
+    return highestValue < 4 ? 4 : highestValue;
   }
 
   @override
@@ -312,6 +525,9 @@ class _AdminChartCardState extends State<_AdminChartCard> {
                       child: CustomPaint(
                         painter: _AdminLineChartPainter(
                           values: widget.values,
+                          labels: widget.labels,
+                          tooltipLabels: widget.tooltipLabels,
+                          maxValue: _maxValue,
                           accentColor: widget.accentColor,
                           activePointIndex: _activePointIndex,
                         ),
@@ -332,6 +548,9 @@ class _AdminChartCardState extends State<_AdminChartCard> {
 class _AdminLineChartPainter extends CustomPainter {
   const _AdminLineChartPainter({
     required this.values,
+    required this.labels,
+    required this.tooltipLabels,
+    required this.maxValue,
     required this.accentColor,
     required this.activePointIndex,
   });
@@ -342,6 +561,9 @@ class _AdminLineChartPainter extends CustomPainter {
   static const _topInset = 7.0;
 
   final List<double> values;
+  final List<String> labels;
+  final List<String> tooltipLabels;
+  final double maxValue;
   final Color accentColor;
   final int? activePointIndex;
 
@@ -400,8 +622,8 @@ class _AdminLineChartPainter extends CustomPainter {
 
     canvas.drawRRect(plotRRect, Paint()..color = const Color(0xFF292929));
 
-    for (final tick in [1, 2, 3, 4]) {
-      final y = origin.dy - (tick / 4.5) * chartHeight;
+    for (var tick = 1; tick <= 4; tick += 1) {
+      final y = origin.dy - (tick / 4) * chartHeight;
       canvas.drawLine(
         Offset(plotRect.left, y),
         Offset(size.width - 4, y),
@@ -417,10 +639,11 @@ class _AdminLineChartPainter extends CustomPainter {
     canvas.drawLine(Offset(plotRect.left, plotRect.top), origin, axisPaint);
     canvas.drawLine(origin, Offset(size.width - 4, origin.dy), axisPaint);
 
-    for (final tick in [1, 2, 3]) {
-      final y = origin.dy - (tick / 4.5) * chartHeight;
+    for (var tick = 1; tick <= 3; tick += 1) {
+      final tickValue = (maxValue / 4 * tick).ceil();
+      final y = origin.dy - (tick / 4) * chartHeight;
       labelPainter.text = TextSpan(
-        text: tick.toString(),
+        text: tickValue.toString(),
         style: const TextStyle(
           color: Colors.white,
           fontSize: 9,
@@ -438,7 +661,7 @@ class _AdminLineChartPainter extends CustomPainter {
     final points = <Offset>[];
     for (var index = 0; index < values.length; index += 1) {
       final x = plotRect.left + (index / (values.length - 1)) * chartWidth;
-      final y = origin.dy - (values[index] / 4.5) * chartHeight;
+      final y = origin.dy - (values[index] / maxValue) * chartHeight;
       points.add(Offset(x, y));
     }
 
@@ -473,16 +696,20 @@ class _AdminLineChartPainter extends CustomPainter {
         canvas: canvas,
         size: size,
         point: point,
-        label: 'Point ${activeIndex + 1}',
+        label: labels.length == values.length
+            ? (tooltipLabels.length == values.length
+                  ? tooltipLabels[activeIndex]
+                  : labels[activeIndex])
+            : 'Day ${activeIndex + 1}',
         value: values[activeIndex],
       );
     }
 
-    final monthLabels = ['W1', 'W2', 'W3'];
-    for (var index = 0; index < monthLabels.length; index += 1) {
-      final x = plotRect.left + (index / (monthLabels.length - 1)) * chartWidth;
+    final chartLabels = labels.length == values.length ? labels : const [];
+    for (var index = 0; index < chartLabels.length; index += 1) {
+      final x = plotRect.left + (index / (chartLabels.length - 1)) * chartWidth;
       labelPainter.text = TextSpan(
-        text: monthLabels[index],
+        text: chartLabels[index],
         style: const TextStyle(
           color: Color(0xFFBDBDBD),
           fontSize: 9,
@@ -493,7 +720,7 @@ class _AdminLineChartPainter extends CustomPainter {
       var labelX = x - labelPainter.width / 2;
       if (index == 0) {
         labelX = plotRect.left;
-      } else if (index == monthLabels.length - 1) {
+      } else if (index == chartLabels.length - 1) {
         labelX = size.width - 4 - labelPainter.width;
       } else {
         labelX = labelX.clamp(
@@ -573,6 +800,9 @@ class _AdminLineChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _AdminLineChartPainter oldDelegate) {
     return oldDelegate.values != values ||
+        oldDelegate.labels != labels ||
+        oldDelegate.tooltipLabels != tooltipLabels ||
+        oldDelegate.maxValue != maxValue ||
         oldDelegate.accentColor != accentColor ||
         oldDelegate.activePointIndex != activePointIndex;
   }
