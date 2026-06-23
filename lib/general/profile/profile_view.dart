@@ -102,6 +102,10 @@ class _ProfileViewState extends State<_ProfileView> {
         key: LocalNotificationService.enabledStorageKey,
         value: value.toString(),
       );
+      await PushNotificationService.instance.setEnabled(
+        accessToken: widget.accessToken,
+        enabled: value,
+      );
       if (!value) {
         await LocalNotificationService.instance.cancelUserReminders(
           widget.userId,

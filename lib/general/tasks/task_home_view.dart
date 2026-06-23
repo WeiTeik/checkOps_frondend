@@ -1378,7 +1378,7 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
 
   bool _canAssignEntryTo(_EntryAssignee user) {
     if (widget.currentUserRole == UserRole.admin) {
-      return !user.isAdmin;
+      return user.id == widget.currentUserId || !user.isAdmin;
     }
     if (widget.currentUserRole == UserRole.qc) {
       return user.id == widget.currentUserId ||
@@ -1723,7 +1723,7 @@ class _AddTaskEntryDialogState extends State<_AddTaskEntryDialog> {
                   isLoading:
                       snapshot.connectionState == ConnectionState.waiting,
                   errorText: _showErrors && _selectedAssignee == null
-                      ? 'Assign User is required'
+                      ? 'Assignee is required'
                       : snapshot.hasError
                       ? _errorMessage(snapshot.error)
                       : null,

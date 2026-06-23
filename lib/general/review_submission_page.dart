@@ -17,6 +17,7 @@ class ReviewSubmissionPage extends StatefulWidget {
     required this.statusLabel,
     required this.statusBackgroundColor,
     required this.statusForegroundColor,
+    required this.onReview,
     this.operatorName = 'Thien Kian Foh',
     this.operatorEmployeeId = '167384965',
     this.operatorRemarks = '',
@@ -37,6 +38,7 @@ class ReviewSubmissionPage extends StatefulWidget {
   final String statusLabel;
   final Color statusBackgroundColor;
   final Color statusForegroundColor;
+  final Future<String> Function(bool accepted, String reviewRemark) onReview;
   final String operatorName;
   final String operatorEmployeeId;
   final String operatorRemarks;
@@ -53,6 +55,7 @@ class ReviewSubmissionPage extends StatefulWidget {
 }
 
 class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
+  bool _isSubmittingReview = false;
   late final TextEditingController _feedbackController = TextEditingController(
     text: widget.qcFeedback,
   );
@@ -125,19 +128,41 @@ class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
     return '$size B';
   }
 
-  void _submitReview(bool accepted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          accepted ? 'Submission accepted.' : 'Submission rejected.',
+  Future<void> _submitReview(bool accepted) async {
+    if (_isSubmittingReview) {
+      return;
+    }
+    setState(() => _isSubmittingReview = true);
+    try {
+      final message = await widget.onReview(
+        accepted,
+        _feedbackController.text.trim(),
+      );
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      widget.onBack();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
         ),
-      ),
-    );
-    widget.onBack();
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmittingReview = false);
+      }
+    }
   }
 
   Future<void> _confirmSubmitReview(bool accepted) async {
-    final actionLabel = accepted ? 'Accepted' : 'Rejected';
+    final actionLabel = accepted ? 'Accept' : 'Reject';
     final shouldSubmit = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -151,7 +176,7 @@ class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
             content: Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                'Are you sure you want to mark this submission as $actionLabel?',
+                'Are you sure you want to $actionLabel this submission?',
               ),
             ),
             actions: [
@@ -176,7 +201,7 @@ class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
     );
 
     if (shouldSubmit == true) {
-      _submitReview(accepted);
+      await _submitReview(accepted);
     }
   }
 
@@ -237,7 +262,7 @@ class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
                 ),
               ),
               if (widget.showOperatorDetails) ...[
-                const _ReviewSectionTitle(title: 'Operator'),
+                const _ReviewSectionTitle(title: 'Assignee'),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
                   child: Column(
@@ -340,24 +365,31 @@ class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
                               children: [
                                 Expanded(
                                   child: _ReviewDecisionButton(
-                                    label: 'Accepted',
+                                    label: _isSubmittingReview
+                                        ? 'Saving...'
+                                        : 'Accept',
                                     icon: Icons.check_rounded,
                                     backgroundColor: const Color(0xFFD9D9D9),
                                     foregroundColor: Colors.black,
                                     borderColor: const Color(0xFFD9D9D9),
-                                    onPressed: () => _confirmSubmitReview(true),
+                                    onPressed: _isSubmittingReview
+                                        ? null
+                                        : () => _confirmSubmitReview(true),
                                   ),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: _ReviewDecisionButton(
-                                    label: 'Rejected',
+                                    label: _isSubmittingReview
+                                        ? 'Saving...'
+                                        : 'Reject',
                                     icon: Icons.close_rounded,
                                     backgroundColor: const Color(0xFFFF4048),
                                     foregroundColor: Colors.black,
                                     borderColor: const Color(0xFFFF4048),
-                                    onPressed: () =>
-                                        _confirmSubmitReview(false),
+                                    onPressed: _isSubmittingReview
+                                        ? null
+                                        : () => _confirmSubmitReview(false),
                                   ),
                                 ),
                               ],
@@ -917,7 +949,7 @@ class _ReviewDecisionButton extends StatelessWidget {
   final Color backgroundColor;
   final Color foregroundColor;
   final Color borderColor;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

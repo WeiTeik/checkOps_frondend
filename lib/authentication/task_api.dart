@@ -159,6 +159,22 @@ class TaskApi {
     return const [];
   }
 
+  Future<Map<String, dynamic>> getTaskEntry({
+    required int entryId,
+    required String accessToken,
+  }) async {
+    final body = await _authApi.request(
+      method: 'GET',
+      path: '/tasks/entries/$entryId',
+      bearerToken: accessToken,
+    );
+    final entry = body['entry'];
+    if (entry is Map<String, dynamic>) {
+      return entry;
+    }
+    return <String, dynamic>{};
+  }
+
   Future<List<Map<String, dynamic>>> getTaskEntriesLite({
     required int taskId,
     required String accessToken,
@@ -270,5 +286,24 @@ class TaskApi {
       bearerToken: accessToken,
     );
     return body['message']?.toString() ?? 'Proof submitted.';
+  }
+
+  Future<String> reviewTaskEntry({
+    required int entryId,
+    required String accessToken,
+    required bool accepted,
+    required String reviewRemark,
+  }) async {
+    final body = await _authApi.request(
+      method: 'PATCH',
+      path: '/tasks/entries/$entryId',
+      payload: {
+        'status': accepted ? 'Approved' : 'Rejected',
+        'review_remark': reviewRemark,
+      },
+      bearerToken: accessToken,
+    );
+    return body['message']?.toString() ??
+        (accepted ? 'Submission accepted.' : 'Submission rejected.');
   }
 }

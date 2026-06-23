@@ -8,9 +8,10 @@ typedef UnauthorizedTokenHandler =
     Future<String?> Function(String expiredAccessToken);
 
 class AuthApiException implements Exception {
-  AuthApiException(this.message);
+  AuthApiException(this.message, {this.statusCode});
 
   final String message;
+  final int? statusCode;
 
   @override
   String toString() => message;
@@ -185,7 +186,10 @@ class AuthApi {
         : jsonDecode(response.body);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AuthApiException(_errorMessage(decoded));
+      throw AuthApiException(
+        _errorMessage(decoded),
+        statusCode: response.statusCode,
+      );
     }
 
     if (decoded is Map<String, dynamic>) {

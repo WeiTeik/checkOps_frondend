@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
@@ -13,6 +14,7 @@ import 'create_task_page.dart';
 import 'review_submission_page.dart';
 import 'submit_proof_page.dart';
 import 'notifications/local_notification_service.dart';
+import 'notifications/push_notification_service.dart';
 
 part '../admin/admin_dashboard_view.dart';
 part '../admin/admin_users_view.dart';
@@ -88,6 +90,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const _storage = FlutterSecureStorage();
   final _taskApi = TaskApi();
+  final _userApi = UserApi();
+  StreamSubscription<Map<String, dynamic>>? _notificationTapSubscription;
   int _selectedIndex = 0;
   late String _displayName = widget.displayName;
   late String _email = widget.email;
@@ -105,6 +109,23 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _syncLocalTaskReminders();
+    _notificationTapSubscription = PushNotificationService
+        .instance
+        .notificationTaps
+        .listen(_openNotificationTarget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final pending = PushNotificationService.instance
+          .takePendingNotificationTap();
+      if (pending != null) {
+        _openNotificationTarget(pending);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationTapSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -182,6 +203,85 @@ class _HomePageState extends State<HomePage> {
     } on Object {
       // Reminder sync is best-effort and must not block the main task UI.
     }
+  }
+
+  Future<void> _openNotificationTarget(Map<String, dynamic> payload) async {
+    final taskId = int.tryParse(payload['related_task_id']?.toString() ?? '');
+    final entryId = int.tryParse(
+      payload['related_task_entry_id']?.toString() ?? '',
+    );
+    if (taskId == null || taskId <= 0) {
+      return;
+    }
+
+    try {
+      final taskPayloads = await _taskApi.getTasks(
+        accessToken: widget.accessToken,
+      );
+      _Task? targetTask;
+      for (final taskPayload in taskPayloads) {
+        final task = _Task.fromJson(taskPayload);
+        if (task.id == taskId) {
+          targetTask = task;
+          break;
+        }
+      }
+      if (targetTask == null || !mounted) {
+        if (entryId != null && entryId > 0 && mounted) {
+          _showRemovedTaskEntryMessage();
+        }
+        return;
+      }
+
+      _TaskEntry? targetEntry;
+      if (entryId != null && entryId > 0) {
+        final entryPayloads = await _taskApi.getTaskEntries(
+          taskId: taskId,
+          accessToken: widget.accessToken,
+        );
+        for (final entryPayload in entryPayloads) {
+          final entry = _TaskEntry.fromJson(entryPayload, targetTask);
+          if (entry.id == entryId) {
+            final userPayload = await _userApi.getUser(
+              userId: entry.userId,
+              accessToken: widget.accessToken,
+            );
+            targetEntry = entry.withAssigneeFromUser(userPayload);
+            break;
+          }
+        }
+      }
+      if (!mounted) {
+        return;
+      }
+      if (entryId != null && entryId > 0 && targetEntry == null) {
+        _showRemovedTaskEntryMessage();
+        return;
+      }
+
+      setState(() {
+        _selectedIndex = _isAdmin ? 2 : 0;
+        _taskDetailTask = targetTask;
+        _selectedTaskEntry = null;
+        _reviewTaskEntry = null;
+      });
+      if (targetEntry != null) {
+        _openTaskEntry(targetEntry);
+      }
+    } on AuthApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    }
+  }
+
+  void _showRemovedTaskEntryMessage() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('This task entry has been removed.')),
+    );
   }
 
   bool get _isAdmin => _role == UserRole.admin;
@@ -281,6 +381,18 @@ class _HomePageState extends State<HomePage> {
                 statusForegroundColor: _statusStyle(
                   _reviewTaskEntry!.status,
                 ).foregroundColor,
+                onReview: (accepted, reviewRemark) async {
+                  final message = await _taskApi.reviewTaskEntry(
+                    entryId: _reviewTaskEntry!.id,
+                    accessToken: widget.accessToken,
+                    accepted: accepted,
+                    reviewRemark: reviewRemark,
+                  );
+                  if (mounted) {
+                    setState(() => _taskRefreshRevision++);
+                  }
+                  return message;
+                },
                 operatorName: _reviewTaskEntry!.assignedUserLabel,
                 operatorEmployeeId: _reviewTaskEntry!.assignedEmployeeLabel,
                 operatorRemarks: _reviewTaskEntry!.submissionRemark,

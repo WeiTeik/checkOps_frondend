@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../general/home_page.dart';
+import '../general/notifications/push_notification_service.dart';
 import 'auth_api.dart';
 
 class AuthSession {
@@ -226,6 +229,11 @@ class AuthSessionManager {
     if (storedSession.hasValidAccessToken) {
       _session = storedSession;
       _shouldPersistSession = true;
+      unawaited(
+        PushNotificationService.instance.registerForSession(
+          storedSession.accessToken,
+        ),
+      );
       return storedSession;
     }
 
@@ -255,6 +263,9 @@ class AuthSessionManager {
   }) async {
     _session = session;
     _shouldPersistSession = rememberMe;
+    unawaited(
+      PushNotificationService.instance.registerForSession(session.accessToken),
+    );
     if (rememberMe) {
       await _store.write(session);
       return;
@@ -310,6 +321,9 @@ class AuthSessionManager {
 
   Future<void> _saveRefreshedSession(AuthSession session) async {
     _session = session;
+    unawaited(
+      PushNotificationService.instance.registerForSession(session.accessToken),
+    );
     if (_shouldPersistSession) {
       await _store.write(session);
     }
@@ -343,6 +357,9 @@ class AuthSessionManager {
     final accessToken = _session?.accessToken;
     try {
       if (accessToken != null && accessToken.isNotEmpty) {
+        await PushNotificationService.instance.unregisterForSession(
+          accessToken,
+        );
         await _authApi.logout(accessToken: accessToken);
       }
     } on Object {

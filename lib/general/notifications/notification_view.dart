@@ -248,7 +248,25 @@ class _NotificationViewState extends State<_NotificationView> {
     await _markRead(notification);
     final entry = notification.entry;
     if (entry != null) {
-      widget.onEntrySelected(entry);
+      try {
+        await _taskApi.getTaskEntry(
+          entryId: entry.id,
+          accessToken: widget.accessToken,
+        );
+        if (mounted) {
+          widget.onEntrySelected(entry);
+        }
+      } on AuthApiException catch (error) {
+        if (!mounted) {
+          return;
+        }
+        final message = error.statusCode == 404
+            ? 'This task entry has been removed.'
+            : error.message;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
       return;
     }
     widget.onTaskSelected(notification.task);

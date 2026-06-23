@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/services.dart';
@@ -31,10 +33,12 @@ class LocalNotificationService {
 
   static const enabledStorageKey = 'profile_notifications_enabled';
   static const _channelId = 'checkops_task_reminders';
+  static const pushChannelId = 'checkops_push_notifications';
   static const _payloadPrefix = 'checkops-reminder';
   static const _maximumScheduledReminders = 60;
 
   final _plugin = FlutterLocalNotificationsPlugin();
+  final _pushTapController = StreamController<Map<String, dynamic>>.broadcast();
   bool _initialized = false;
   bool _nativePluginUnavailable = false;
 
@@ -61,10 +65,45 @@ class LocalNotificationService {
       ),
     );
     try {
-      await _plugin.initialize(settings: settings);
+      await _plugin.initialize(
+        settings: settings,
+        onDidReceiveNotificationResponse: _handleNotificationResponse,
+      );
+      if (Platform.isAndroid) {
+        await _plugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >()
+            ?.createNotificationChannel(
+              const AndroidNotificationChannel(
+                pushChannelId,
+                'CheckOps notifications',
+                description: 'Task and workflow updates from CheckOps',
+                importance: Importance.high,
+              ),
+            );
+      }
       _initialized = true;
     } on MissingPluginException {
       _nativePluginUnavailable = true;
+    }
+  }
+
+  Stream<Map<String, dynamic>> get pushNotificationTaps =>
+      _pushTapController.stream;
+
+  void _handleNotificationResponse(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) {
+      return;
+    }
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map) {
+        _pushTapController.add(Map<String, dynamic>.from(decoded));
+      }
+    } on FormatException {
+      // Scheduled reminder payloads use a compact non-JSON format.
     }
   }
 
@@ -139,6 +178,36 @@ class LocalNotificationService {
         payload: _payload(userId, reminder),
       );
     }
+  }
+
+  Future<void> showPushNotification({
+    int? id,
+    String? title,
+    String? body,
+    Map<String, dynamic> payload = const {},
+  }) async {
+    await initialize();
+    if (!_initialized ||
+        !Platform.isAndroid ||
+        (title == null && body == null)) {
+      return;
+    }
+
+    await _plugin.show(
+      id: id ?? DateTime.now().millisecondsSinceEpoch.remainder(0x7fffffff),
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          pushChannelId,
+          'CheckOps notifications',
+          channelDescription: 'Task and workflow updates from CheckOps',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+      payload: jsonEncode(payload),
+    );
   }
 
   Future<void> cancelUserReminders(int userId) async {
