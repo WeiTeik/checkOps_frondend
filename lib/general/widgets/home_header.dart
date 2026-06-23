@@ -33,88 +33,53 @@ class _HomeHeader extends StatelessWidget {
       ),
       child: SizedBox(
         height: 68,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(onBack == null ? 18 : 0, 10, 8, 10),
-          child: Row(
-            children: [
-              if (onBack != null)
-                IconButton(
-                  onPressed: onBack,
-                  tooltip: 'Back',
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  color: Colors.white,
-                  iconSize: 32,
-                ),
-              Expanded(
-                child: Text(
-                  title,
-                  textAlign: onBack == null
-                      ? TextAlign.start
-                      : TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
+        child: onBack != null
+            ? Stack(
+                alignment: Alignment.center,
+                children: [
+                  Positioned.fill(
+                    left: 56,
+                    right: 56,
+                    child: Center(child: _HeaderTitle(title: title)),
                   ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: onBack,
+                      tooltip: 'Back',
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      color: Colors.white,
+                      iconSize: 32,
+                    ),
+                  ),
+                  if (showTaskActions)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: _TaskActionsMenu(
+                        onTaskEdit: onTaskEdit,
+                        onTaskDelete: onTaskDelete,
+                      ),
+                    ),
+                ],
+              )
+            : Padding(
+                padding: const EdgeInsets.fromLTRB(18, 10, 8, 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _HeaderTitle(title: title, alignLeft: true),
+                    ),
+                    if (showAccountActions) ...[
+                      _RoleChip(role: role),
+                      const SizedBox(width: 10),
+                      _HeaderProfileAvatar(
+                        initials: initials,
+                        profilePic: profilePic,
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              if (showTaskActions)
-                PopupMenuButton<String>(
-                  tooltip: 'Task actions',
-                  color: const Color(0xFF303030),
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(
-                    Icons.more_horiz_rounded,
-                    color: Colors.white,
-                  ),
-                  onSelected: (value) {
-                    if (value == 'edit') {
-                      onTaskEdit?.call();
-                      return;
-                    }
-                    if (onTaskDelete != null) {
-                      onTaskDelete?.call();
-                    }
-                  },
-                  itemBuilder: (context) {
-                    return [
-                      PopupMenuItem(
-                        value: 'edit',
-                        enabled: onTaskEdit != null,
-                        child: const Text(
-                          'Edit',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        enabled: onTaskDelete != null,
-                        child: Text(
-                          'Delete',
-                          style: TextStyle(
-                            color: onTaskDelete == null
-                                ? const Color(0xFF777777)
-                                : Colors.white,
-                          ),
-                        ),
-                      ),
-                    ];
-                  },
-                ),
-              if (showAccountActions) ...[
-                _RoleChip(role: role),
-                const SizedBox(width: 10),
-                _HeaderProfileAvatar(
-                  initials: initials,
-                  profilePic: profilePic,
-                ),
-              ],
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -133,6 +98,76 @@ class _HomeHeader extends StatelessWidget {
     }
     return '${words.first.characters.first}${words.last.characters.first}'
         .toUpperCase();
+  }
+}
+
+class _HeaderTitle extends StatelessWidget {
+  const _HeaderTitle({required this.title, this.alignLeft = false});
+
+  final String title;
+  final bool alignLeft;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      textAlign: alignLeft ? TextAlign.start : TextAlign.center,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 21,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0,
+      ),
+    );
+  }
+}
+
+class _TaskActionsMenu extends StatelessWidget {
+  const _TaskActionsMenu({this.onTaskEdit, this.onTaskDelete});
+
+  final VoidCallback? onTaskEdit;
+  final VoidCallback? onTaskDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'Task actions',
+      color: const Color(0xFF303030),
+      padding: EdgeInsets.zero,
+      icon: const Icon(Icons.more_horiz_rounded, color: Colors.white),
+      onSelected: (value) {
+        if (value == 'edit') {
+          onTaskEdit?.call();
+          return;
+        }
+        if (onTaskDelete != null) {
+          onTaskDelete?.call();
+        }
+      },
+      itemBuilder: (context) {
+        return [
+          PopupMenuItem(
+            value: 'edit',
+            enabled: onTaskEdit != null,
+            child: const Text('Edit', style: TextStyle(color: Colors.white)),
+          ),
+          PopupMenuItem(
+            value: 'delete',
+            enabled: onTaskDelete != null,
+            child: Text(
+              'Delete',
+              style: TextStyle(
+                color: onTaskDelete == null
+                    ? const Color(0xFF777777)
+                    : Colors.white,
+              ),
+            ),
+          ),
+        ];
+      },
+    );
   }
 }
 
