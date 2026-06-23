@@ -738,7 +738,7 @@ class _AddUserRoleDropdown extends StatelessWidget {
   }
 }
 
-class _QcAutocompleteField extends StatelessWidget {
+class _QcAutocompleteField extends StatefulWidget {
   const _QcAutocompleteField({
     required this.qcUsers,
     required this.selectedQc,
@@ -756,16 +756,59 @@ class _QcAutocompleteField extends StatelessWidget {
   final FormFieldValidator<String> validator;
 
   @override
+  State<_QcAutocompleteField> createState() => _QcAutocompleteFieldState();
+}
+
+class _QcAutocompleteFieldState extends State<_QcAutocompleteField> {
+  TextEditingController? _textEditingController;
+  bool _isSyncScheduled = false;
+
+  @override
+  void didUpdateWidget(covariant _QcAutocompleteField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedQc?.id != widget.selectedQc?.id) {
+      _scheduleSelectedQcSync();
+    }
+  }
+
+  void _scheduleSelectedQcSync() {
+    if (_isSyncScheduled || widget.selectedQc == null) {
+      return;
+    }
+
+    _isSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isSyncScheduled = false;
+      if (!mounted) {
+        return;
+      }
+
+      final controller = _textEditingController;
+      final selectedQc = widget.selectedQc;
+      if (controller == null ||
+          selectedQc == null ||
+          controller.text == selectedQc.name) {
+        return;
+      }
+
+      controller.value = TextEditingValue(
+        text: selectedQc.name,
+        selection: TextSelection.collapsed(offset: selectedQc.name.length),
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Autocomplete<_AdminUser>(
       displayStringForOption: (user) => user.name,
       optionsBuilder: (textEditingValue) {
         final keyword = textEditingValue.text.trim().toLowerCase();
-        if (keyword.isEmpty || isLoading) {
+        if (keyword.isEmpty || widget.isLoading) {
           return const Iterable<_AdminUser>.empty();
         }
 
-        final matches = qcUsers.where((user) {
+        final matches = widget.qcUsers.where((user) {
           return user.name.toLowerCase().contains(keyword) ||
               user.email.toLowerCase().contains(keyword) ||
               user.employeeId.toLowerCase().contains(keyword);
@@ -785,12 +828,12 @@ class _QcAutocompleteField extends StatelessWidget {
 
         return matches.take(8);
       },
-      onSelected: onSelected,
+      onSelected: widget.onSelected,
       fieldViewBuilder:
           (context, textEditingController, focusNode, onFieldSubmitted) {
-            if (selectedQc != null &&
-                textEditingController.text != selectedQc!.name) {
-              textEditingController.text = selectedQc!.name;
+            if (!identical(_textEditingController, textEditingController)) {
+              _textEditingController = textEditingController;
+              _scheduleSelectedQcSync();
             }
 
             return TextFormField(
@@ -799,13 +842,13 @@ class _QcAutocompleteField extends StatelessWidget {
               textInputAction: TextInputAction.done,
               style: const TextStyle(color: Colors.black, fontSize: 16),
               cursorColor: Colors.black,
-              onChanged: onTextChanged,
-              validator: validator,
+              onChanged: widget.onTextChanged,
+              validator: widget.validator,
               decoration:
                   _addUserInputDecoration(
-                    isLoading ? 'Loading QC users...' : 'Type QC name',
+                    widget.isLoading ? 'Loading QC users...' : 'Type QC name',
                   ).copyWith(
-                    suffixIcon: isLoading
+                    suffixIcon: widget.isLoading
                         ? const Padding(
                             padding: EdgeInsets.all(14),
                             child: SizedBox(
