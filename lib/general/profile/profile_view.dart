@@ -13,6 +13,7 @@ class _ProfileView extends StatefulWidget {
     this.onLogout,
     this.loginBuilder,
     this.onProfileChanged,
+    this.onNotificationSettingChanged,
   });
 
   final bool isActive;
@@ -33,13 +34,13 @@ class _ProfileView extends StatefulWidget {
     String? profilePic,
   })?
   onProfileChanged;
+  final Future<void> Function()? onNotificationSettingChanged;
 
   @override
   State<_ProfileView> createState() => _ProfileViewState();
 }
 
 class _ProfileViewState extends State<_ProfileView> {
-  static const _notificationKey = 'profile_notifications_enabled';
   static const _storage = FlutterSecureStorage();
   final _userApi = UserApi();
   final _imagePicker = ImagePicker();
@@ -68,7 +69,9 @@ class _ProfileViewState extends State<_ProfileView> {
 
   Future<void> _loadNotificationSetting() async {
     try {
-      final value = await _storage.read(key: _notificationKey);
+      final value = await _storage.read(
+        key: LocalNotificationService.enabledStorageKey,
+      );
       if (!mounted || value == null) {
         return;
       }
@@ -81,7 +84,31 @@ class _ProfileViewState extends State<_ProfileView> {
   Future<void> _setNotificationSetting(bool value) async {
     setState(() => _notificationsEnabled = value);
     try {
-      await _storage.write(key: _notificationKey, value: value.toString());
+      if (value) {
+        final permitted = await LocalNotificationService.instance
+            .requestPermission();
+        if (!permitted) {
+          if (mounted) {
+            setState(() => _notificationsEnabled = false);
+          }
+          await _storage.write(
+            key: LocalNotificationService.enabledStorageKey,
+            value: 'false',
+          );
+          return;
+        }
+      }
+      await _storage.write(
+        key: LocalNotificationService.enabledStorageKey,
+        value: value.toString(),
+      );
+      if (!value) {
+        await LocalNotificationService.instance.cancelUserReminders(
+          widget.userId,
+        );
+      } else {
+        await widget.onNotificationSettingChanged?.call();
+      }
     } on Object {
       if (!mounted) {
         return;
@@ -240,6 +267,9 @@ class _ProfileViewState extends State<_ProfileView> {
 
     setState(() => _isLoggingOut = true);
     try {
+      await LocalNotificationService.instance.cancelUserReminders(
+        widget.userId,
+      );
       await widget.onLogout?.call();
       if (!mounted) {
         return;

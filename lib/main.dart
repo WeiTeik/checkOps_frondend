@@ -9,10 +9,16 @@ import 'authentication/expired_auth_link_page.dart';
 import 'authentication/login_page.dart';
 import 'authentication/otp_email_verification.dart';
 import 'general/home_page.dart';
+import 'general/notifications/local_notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppConfig.load();
+  try {
+    await LocalNotificationService.instance.initialize();
+  } on Object {
+    // Notification setup must not prevent the app from starting.
+  }
   runApp(const MyApp());
 }
 
@@ -118,7 +124,7 @@ class _AuthGate extends StatefulWidget {
 
   @override
   State<_AuthGate> createState() => _AuthGateState();
-} 
+}
 
 class _AuthGateState extends State<_AuthGate> {
   late final Future<AuthSession?> _restoreSession = widget.sessionManager

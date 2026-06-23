@@ -12,6 +12,7 @@ import 'checkops_bottom_nav.dart';
 import 'create_task_page.dart';
 import 'review_submission_page.dart';
 import 'submit_proof_page.dart';
+import 'notifications/local_notification_service.dart';
 
 part '../admin/admin_dashboard_view.dart';
 part '../admin/admin_users_view.dart';
@@ -85,6 +86,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  static const _storage = FlutterSecureStorage();
   final _taskApi = TaskApi();
   int _selectedIndex = 0;
   late String _displayName = widget.displayName;
@@ -98,6 +100,89 @@ class _HomePageState extends State<HomePage> {
   _Task? _editingTask;
   bool _showCreateTask = false;
   int _taskRefreshRevision = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncLocalTaskReminders();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId ||
+        oldWidget.accessToken != widget.accessToken) {
+      _syncLocalTaskReminders();
+    }
+  }
+
+  Future<void> _syncLocalTaskReminders() async {
+    try {
+      final setting = await _storage.read(
+        key: LocalNotificationService.enabledStorageKey,
+      );
+      if (setting == 'false') {
+        await LocalNotificationService.instance.cancelUserReminders(
+          widget.userId,
+        );
+        return;
+      }
+
+      final permitted = await LocalNotificationService.instance
+          .requestPermission();
+      if (!permitted) {
+        return;
+      }
+
+      final taskPayloads = await _taskApi.getTasks(
+        accessToken: widget.accessToken,
+        isActive: true,
+      );
+      final tasks = taskPayloads.map(_Task.fromJson).toList();
+      final entryGroups = await Future.wait(
+        tasks.map((task) async {
+          final payloads = await _taskApi.getTaskEntriesLite(
+            taskId: task.id,
+            accessToken: widget.accessToken,
+            status: 'Pending',
+          );
+          return payloads.map((payload) => _TaskEntry.fromJson(payload, task));
+        }),
+      );
+      final reminders = <LocalTaskReminder>[];
+      for (final entry in entryGroups.expand((entries) => entries)) {
+        if (entry.userId != widget.userId ||
+            entry.status != _TaskStatus.pending ||
+            !entry.task.isActive) {
+          continue;
+        }
+        reminders.add(
+          LocalTaskReminder(
+            entryId: entry.id,
+            title: 'Task ready for proof',
+            body: entry.task.title,
+            scheduledAt: entry.startAt,
+            kind: LocalTaskReminderKind.ready,
+          ),
+        );
+        reminders.add(
+          LocalTaskReminder(
+            entryId: entry.id,
+            title: 'Task due in 24 hours',
+            body: entry.task.title,
+            scheduledAt: entry.dueAt.subtract(const Duration(hours: 24)),
+            kind: LocalTaskReminderKind.dueSoon,
+          ),
+        );
+      }
+      await LocalNotificationService.instance.replaceUserReminders(
+        userId: widget.userId,
+        reminders: reminders,
+      );
+    } on Object {
+      // Reminder sync is best-effort and must not block the main task UI.
+    }
+  }
 
   bool get _isAdmin => _role == UserRole.admin;
 
@@ -173,12 +258,15 @@ class _HomePageState extends State<HomePage> {
                   _showCreateTask = false;
                   _editingTask = null;
                 }),
-                onTaskCreated: () => setState(() {
-                  _taskRefreshRevision++;
-                  _showCreateTask = false;
-                  _editingTask = null;
-                  _taskDetailTask = null;
-                }),
+                onTaskCreated: () {
+                  setState(() {
+                    _taskRefreshRevision++;
+                    _showCreateTask = false;
+                    _editingTask = null;
+                    _taskDetailTask = null;
+                  });
+                  _syncLocalTaskReminders();
+                },
               )
             : showReviewSubmission
             ? ReviewSubmissionPage(
@@ -236,10 +324,13 @@ class _HomePageState extends State<HomePage> {
                 accessToken: widget.accessToken,
                 entryId: _selectedTaskEntry!.id,
                 onBack: () => setState(() => _selectedTaskEntry = null),
-                onSubmitted: () => setState(() {
-                  _selectedTaskEntry = null;
-                  _taskRefreshRevision++;
-                }),
+                onSubmitted: () {
+                  setState(() {
+                    _selectedTaskEntry = null;
+                    _taskRefreshRevision++;
+                  });
+                  _syncLocalTaskReminders();
+                },
                 onEditEntry: _canEditTaskEntry(_selectedTaskEntry!)
                     ? () => _editTaskEntry(_selectedTaskEntry!)
                     : null,
@@ -336,6 +427,8 @@ class _HomePageState extends State<HomePage> {
                                 onLogout: widget.onLogout,
                                 loginBuilder: widget.loginBuilder,
                                 onProfileChanged: _updateProfile,
+                                onNotificationSettingChanged:
+                                    _syncLocalTaskReminders,
                               ),
                             ]
                           : [
@@ -393,6 +486,8 @@ class _HomePageState extends State<HomePage> {
                                 onLogout: widget.onLogout,
                                 loginBuilder: widget.loginBuilder,
                                 onProfileChanged: _updateProfile,
+                                onNotificationSettingChanged:
+                                    _syncLocalTaskReminders,
                               ),
                             ],
                     ),
@@ -500,6 +595,7 @@ class _HomePageState extends State<HomePage> {
         _reviewTaskEntry = null;
         _taskRefreshRevision++;
       });
+      await _syncLocalTaskReminders();
     }
   }
 
@@ -581,6 +677,7 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
+      await _syncLocalTaskReminders();
     } on AuthApiException catch (error) {
       if (!mounted) {
         return;
@@ -673,6 +770,7 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
+      await _syncLocalTaskReminders();
     } on AuthApiException catch (error) {
       if (!mounted) {
         return;
