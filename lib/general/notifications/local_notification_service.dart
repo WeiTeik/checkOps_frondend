@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -35,12 +36,14 @@ class LocalNotificationService {
 
   final _plugin = FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+  bool _nativePluginUnavailable = false;
 
   Future<void> initialize() async {
-    if (_initialized) {
+    if (_initialized || _nativePluginUnavailable) {
       return;
     }
 
+    _registerPlatformImplementation();
     tz.initializeTimeZones();
     try {
       final localTimezone = await FlutterTimezone.getLocalTimezone();
@@ -57,12 +60,27 @@ class LocalNotificationService {
         requestSoundPermission: false,
       ),
     );
-    await _plugin.initialize(settings: settings);
-    _initialized = true;
+    try {
+      await _plugin.initialize(settings: settings);
+      _initialized = true;
+    } on MissingPluginException {
+      _nativePluginUnavailable = true;
+    }
+  }
+
+  void _registerPlatformImplementation() {
+    if (Platform.isAndroid) {
+      AndroidFlutterLocalNotificationsPlugin.registerWith();
+    } else if (Platform.isIOS) {
+      IOSFlutterLocalNotificationsPlugin.registerWith();
+    }
   }
 
   Future<bool> requestPermission() async {
     await initialize();
+    if (!_initialized) {
+      return false;
+    }
     if (Platform.isAndroid) {
       return await _plugin
               .resolvePlatformSpecificImplementation<
@@ -87,6 +105,9 @@ class LocalNotificationService {
     required List<LocalTaskReminder> reminders,
   }) async {
     await initialize();
+    if (!_initialized) {
+      return;
+    }
     await cancelUserReminders(userId);
 
     final now = DateTime.now();
@@ -122,6 +143,9 @@ class LocalNotificationService {
 
   Future<void> cancelUserReminders(int userId) async {
     await initialize();
+    if (!_initialized) {
+      return;
+    }
     final prefix = '$_payloadPrefix:$userId:';
     final pending = await _plugin.pendingNotificationRequests();
     for (final notification in pending) {
