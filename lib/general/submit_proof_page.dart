@@ -579,110 +579,108 @@ class _SubmitProofPageState extends State<SubmitProofPage> {
               const _ProofSectionTitle(title: 'Submitter Remarks'),
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 18, 18, 26),
-                child: Column(
-                  children: [
-                    isReadOnly
-                        ? _ReadOnlyProofText(
-                            text: remarks.isEmpty
-                                ? (isPendingReadOnly
-                                      ? 'No remarks from submitter yet.'
-                                      : isExpiredReadOnly
-                                      ? 'No remarks were submitted before this entry expired.'
-                                      : 'No remarks from submitter.')
-                                : remarks,
-                          )
-                        : TextField(
-                            controller: _remarksController,
-                            minLines: 3,
-                            maxLines: 5,
-                            enabled: !_isSubmitting,
-                            onChanged: (_) => setState(() {}),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0,
-                            ),
-                            cursorColor: Colors.white,
-                            decoration: InputDecoration(
-                              filled: true,
-                              fillColor: const Color(0xFF474747),
-                              hintText: 'Add submitter remarks (if any)',
-                              errorText: requiresRemarks && !hasRequiredRemarks
-                                  ? 'Submitter remarks are required when failed.'
-                                  : null,
-                              hintStyle: const TextStyle(
-                                color: Color(0xFFC7C7C7),
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0,
-                              ),
-                              contentPadding: const EdgeInsets.all(18),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFC7C7C7),
-                                  width: 1.5,
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFC7C7C7),
-                                  width: 1.5,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Colors.white,
-                                  width: 1.8,
-                                ),
-                              ),
-                            ),
+                child: isReadOnly
+                    ? _ReadOnlyProofText(
+                        text: remarks.isEmpty
+                            ? (isPendingReadOnly
+                                  ? 'No remarks from submitter yet.'
+                                  : isExpiredReadOnly
+                                  ? 'No remarks were submitted before this entry expired.'
+                                  : 'No remarks from submitter.')
+                            : remarks,
+                      )
+                    : TextField(
+                        controller: _remarksController,
+                        minLines: 3,
+                        maxLines: 5,
+                        enabled: !_isSubmitting,
+                        onChanged: (_) => setState(() {}),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0,
+                        ),
+                        cursorColor: Colors.white,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: const Color(0xFF474747),
+                          hintText: 'Add submitter remarks (if any)',
+                          errorText: requiresRemarks && !hasRequiredRemarks
+                              ? 'Submitter remarks are required when failed.'
+                              : null,
+                          hintStyle: const TextStyle(
+                            color: Color(0xFFC7C7C7),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0,
                           ),
-                    if (widget.showReviewerFeedback) ...[
-                      const SizedBox(height: 18),
-                      const _ProofSectionTitle(title: 'Reviewer Remarks'),
-                      const SizedBox(height: 18),
-                      _ReadOnlyProofText(
-                        text: feedback.isEmpty ? 'No feedback.' : feedback,
-                      ),
-                    ],
-                    if (!isReadOnly) ...[
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: OutlinedButton(
-                          onPressed: canSubmit ? _submitProof : null,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            disabledForegroundColor: const Color(0xFF8E8E8E),
-                            side: BorderSide(
-                              color: canSubmit
-                                  ? const Color(0xFFC7C7C7)
-                                  : const Color(0xFF777777),
+                          contentPadding: const EdgeInsets.all(18),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFC7C7C7),
                               width: 1.5,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFC7C7C7),
+                              width: 1.5,
                             ),
                           ),
-                          child: Text(
-                            _isSubmitting ? 'Submitting...' : 'Submit',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0,
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                              color: Colors.white,
+                              width: 1.8,
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ],
-                ),
               ),
+              if (widget.showReviewerFeedback) ...[
+                const _ProofSectionTitle(title: 'Reviewer Remarks'),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 26),
+                  child: _ReadOnlyProofText(
+                    text: feedback.isEmpty ? 'No feedback.' : feedback,
+                  ),
+                ),
+              ],
+              if (!isReadOnly)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 26),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: canSubmit ? _submitProof : null,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        disabledForegroundColor: const Color(0xFF8E8E8E),
+                        side: BorderSide(
+                          color: canSubmit
+                              ? const Color(0xFFC7C7C7)
+                              : const Color(0xFF777777),
+                          width: 1.5,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        _isSubmitting ? 'Submitting...' : 'Submit',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -713,72 +711,79 @@ class _SubmitProofHeader extends StatelessWidget {
         color: Color(0xFF474747),
         border: Border(bottom: BorderSide(color: Color(0xFFB8B8B8), width: 1)),
       ),
-      child: Row(
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          const SizedBox(width: 6),
-          IconButton(
-            onPressed: onBack,
-            tooltip: 'Back',
-            icon: const Icon(Icons.arrow_back_rounded),
-            color: Colors.white,
-            iconSize: 32,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 62),
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
+            ),
           ),
-          Expanded(
-            child: Center(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 21,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0,
-                ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: IconButton(
+                onPressed: onBack,
+                tooltip: 'Back',
+                icon: const Icon(Icons.arrow_back_rounded),
+                color: Colors.white,
+                iconSize: 32,
               ),
             ),
           ),
           if (showActions)
-            PopupMenuButton<String>(
-              tooltip: 'Task entry actions',
-              color: const Color(0xFF303030),
-              icon: const Icon(Icons.more_horiz_rounded, color: Colors.white),
-              onSelected: (value) {
-                if (value == 'edit') {
-                  onEditEntry?.call();
-                  return;
-                }
-                onDeleteEntry?.call();
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'edit',
-                  enabled: onEditEntry != null,
-                  child: Text(
-                    'Edit',
-                    style: TextStyle(
-                      color: onEditEntry == null
-                          ? const Color(0xFF777777)
-                          : Colors.white,
+            Align(
+              alignment: Alignment.centerRight,
+              child: PopupMenuButton<String>(
+                tooltip: 'Task entry actions',
+                color: const Color(0xFF303030),
+                icon: const Icon(Icons.more_horiz_rounded, color: Colors.white),
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    onEditEntry?.call();
+                    return;
+                  }
+                  onDeleteEntry?.call();
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    enabled: onEditEntry != null,
+                    child: Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: onEditEntry == null
+                            ? const Color(0xFF777777)
+                            : Colors.white,
+                      ),
                     ),
                   ),
-                ),
-                PopupMenuItem(
-                  value: 'delete',
-                  enabled: onDeleteEntry != null,
-                  child: Text(
-                    'Delete',
-                    style: TextStyle(
-                      color: onDeleteEntry == null
-                          ? const Color(0xFF777777)
-                          : Colors.white,
+                  PopupMenuItem(
+                    value: 'delete',
+                    enabled: onDeleteEntry != null,
+                    child: Text(
+                      'Delete',
+                      style: TextStyle(
+                        color: onDeleteEntry == null
+                            ? const Color(0xFF777777)
+                            : Colors.white,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            )
-          else
-            const SizedBox(width: 16),
+                ],
+              ),
+            ),
         ],
       ),
     );
