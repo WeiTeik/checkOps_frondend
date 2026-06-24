@@ -547,7 +547,7 @@ class _CreateTaskPageState extends State<CreateTaskPage> {
         Expanded(
           child: ListView(
             controller: _scrollController,
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
             children: [
               _CreateTaskField(
                 fieldKey: _titleKey,
@@ -811,14 +811,14 @@ class _CreateTaskSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 46,
+      height: 42,
       alignment: Alignment.center,
       color: const Color(0xFF303030),
       child: Text(
         title,
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 19,
+          color: Color(0xFFC7C7C7),
+          fontSize: 16,
           fontWeight: FontWeight.w800,
           letterSpacing: 0,
         ),
