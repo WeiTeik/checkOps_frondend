@@ -22,8 +22,6 @@ class _NotificationView extends StatefulWidget {
 }
 
 class _NotificationViewState extends State<_NotificationView> {
-  static const _storage = FlutterSecureStorage();
-
   final _taskApi = TaskApi();
   Future<List<_CheckOpsNotification>>? _notificationsFuture;
   Set<String> _readNotificationIds = const {};
@@ -31,7 +29,6 @@ class _NotificationViewState extends State<_NotificationView> {
   @override
   void initState() {
     super.initState();
-    _loadReadState();
     _loadNotifications();
   }
 
@@ -41,47 +38,9 @@ class _NotificationViewState extends State<_NotificationView> {
     if (oldWidget.accessToken != widget.accessToken ||
         oldWidget.role != widget.role ||
         oldWidget.userId != widget.userId) {
-      _loadReadState();
       _loadNotifications();
     } else if (widget.isActive && !oldWidget.isActive) {
       _loadNotifications();
-    }
-  }
-
-  String get _readStorageKey {
-    return 'notifications_read_${widget.userId}_${widget.role.name}';
-  }
-
-  Future<void> _loadReadState() async {
-    try {
-      final rawValue = await _storage.read(key: _readStorageKey);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _readNotificationIds = rawValue == null || rawValue.isEmpty
-            ? const {}
-            : rawValue.split('|').where((id) => id.isNotEmpty).toSet();
-      });
-    } on Object {
-      if (!mounted) {
-        return;
-      }
-      setState(() => _readNotificationIds = const {});
-    }
-  }
-
-  Future<void> _saveReadState(Set<String> ids) async {
-    setState(() => _readNotificationIds = ids);
-    try {
-      await _storage.write(key: _readStorageKey, value: ids.join('|'));
-    } on Object {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not save notification state.')),
-      );
     }
   }
 
@@ -95,166 +54,113 @@ class _NotificationViewState extends State<_NotificationView> {
   }
 
   Future<List<_CheckOpsNotification>> _loadNotificationItems() async {
-    final taskPayloads = await _taskApi.getTasks(
+    final notificationFuture = _taskApi.getNotifications(
       accessToken: widget.accessToken,
     );
-    final tasks = taskPayloads.map(_Task.fromJson).toList();
-    final now = DateTime.now();
+    final taskFuture = _taskApi.getTasks(accessToken: widget.accessToken);
+    final notificationPayloads = await notificationFuture;
+    final taskPayloads = await taskFuture;
+    final tasksById = {
+      for (final payload in taskPayloads)
+        _intFrom(payload['id']): _Task.fromJson(payload),
+    };
 
-    final nestedItems = await Future.wait(
-      tasks.map((task) async {
-        final entryPayloads = await _taskApi.getTaskEntries(
-          taskId: task.id,
-          accessToken: widget.accessToken,
+    final notifications =
+        notificationPayloads.map((payload) {
+          final taskId = _nullableNotificationId(payload['related_task_id']);
+          final type = payload['type']?.toString() ?? '';
+          return _CheckOpsNotification(
+            id: _intFrom(payload['id']).toString(),
+            kind: _notificationKindFromType(type),
+            title: type.toLowerCase().contains('failed')
+                ? 'Task entry submission failed'
+                : payload['title']?.toString() ?? 'Notification',
+            message: payload['message']?.toString() ?? '',
+            timestamp: _dateFrom(payload['created_at']),
+            task: taskId == null ? null : tasksById[taskId],
+            relatedTaskId: taskId,
+            relatedEntryId: _nullableNotificationId(
+              payload['related_task_entry_id'],
+            ),
+            relatedEntryDeleted: payload['related_task_entry_deleted'] == true,
+            isRead: payload['read_at'] != null,
+          );
+        }).toList()..sort(
+          (first, second) => second.timestamp.compareTo(first.timestamp),
         );
-        final entries = entryPayloads
-            .map((entry) => _TaskEntry.fromJson(entry, task))
-            .toList();
-        return _notificationsForTask(task, entries, now);
-      }),
-    );
 
-    final notifications = nestedItems.expand((items) => items).toList()
-      ..sort(_compareNotifications);
+    _readNotificationIds = {
+      for (final notification in notifications)
+        if (notification.isRead) notification.id,
+    };
     return notifications;
-  }
-
-  List<_CheckOpsNotification> _notificationsForTask(
-    _Task task,
-    List<_TaskEntry> entries,
-    DateTime now,
-  ) {
-    final items = <_CheckOpsNotification>[];
-
-    if (!task.isActive) {
-      items.add(
-        _CheckOpsNotification(
-          id: 'task-${task.id}-inactive',
-          kind: _NotificationKind.inactiveTask,
-          title: 'Task inactive',
-          message: task.title,
-          timestamp: task.recurrenceStartAt,
-          task: task,
-        ),
-      );
-    }
-
-    for (final entry in entries) {
-      final dueSoon =
-          entry.status == _TaskStatus.pending &&
-          entry.dueAt.isAfter(now) &&
-          entry.dueAt.difference(now) <= const Duration(hours: 24);
-      final overdue =
-          entry.status == _TaskStatus.pending && entry.dueAt.isBefore(now);
-
-      if (entry.status == _TaskStatus.submitted) {
-        items.add(
-          _CheckOpsNotification(
-            id: 'entry-${entry.id}-submitted',
-            kind: _NotificationKind.submitted,
-            title: widget.role == UserRole.operator
-                ? 'Proof submitted'
-                : 'Submission waiting for review',
-            message: entry.task.title,
-            timestamp: entry.submittedAt ?? entry.dueAt,
-            task: task,
-            entry: entry,
-          ),
-        );
-      } else if (overdue) {
-        items.add(
-          _CheckOpsNotification(
-            id: 'entry-${entry.id}-overdue',
-            kind: _NotificationKind.overdue,
-            title: 'Task overdue',
-            message: entry.task.title,
-            timestamp: entry.dueAt,
-            task: task,
-            entry: entry,
-          ),
-        );
-      } else if (entry.isAvailableForSubmission) {
-        items.add(
-          _CheckOpsNotification(
-            id: 'entry-${entry.id}-ready',
-            kind: _NotificationKind.ready,
-            title: 'Task ready for proof',
-            message: entry.task.title,
-            timestamp: entry.startAt,
-            task: task,
-            entry: entry,
-          ),
-        );
-      } else if (dueSoon) {
-        items.add(
-          _CheckOpsNotification(
-            id: 'entry-${entry.id}-due-soon',
-            kind: _NotificationKind.dueSoon,
-            title: 'Task due soon',
-            message: entry.task.title,
-            timestamp: entry.dueAt,
-            task: task,
-            entry: entry,
-          ),
-        );
-      } else if (entry.status == _TaskStatus.approved ||
-          entry.status == _TaskStatus.rejected ||
-          entry.status == _TaskStatus.failed) {
-        final statusStyle = _statusStyle(entry.status);
-        items.add(
-          _CheckOpsNotification(
-            id: 'entry-${entry.id}-${statusStyle.label.toLowerCase()}',
-            kind: _NotificationKind.result,
-            title: 'Submission ${statusStyle.label.toLowerCase()}',
-            message: entry.task.title,
-            timestamp: entry.submittedAt ?? entry.dueAt,
-            task: task,
-            entry: entry,
-          ),
-        );
-      }
-    }
-
-    return items;
-  }
-
-  int _compareNotifications(
-    _CheckOpsNotification first,
-    _CheckOpsNotification second,
-  ) {
-    final firstPriority = first.kind.priority;
-    final secondPriority = second.kind.priority;
-    if (firstPriority != secondPriority) {
-      return firstPriority.compareTo(secondPriority);
-    }
-    return second.timestamp.compareTo(first.timestamp);
   }
 
   Future<void> _markRead(_CheckOpsNotification notification) async {
     if (_readNotificationIds.contains(notification.id)) {
       return;
     }
-    await _saveReadState({..._readNotificationIds, notification.id});
+    try {
+      await _taskApi.markNotificationRead(
+        notificationId: int.parse(notification.id),
+        accessToken: widget.accessToken,
+      );
+      if (mounted) {
+        setState(() {
+          _readNotificationIds = {..._readNotificationIds, notification.id};
+        });
+      }
+    } on AuthApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 
   Future<void> _markAllRead(List<_CheckOpsNotification> notifications) async {
-    await _saveReadState({
-      ..._readNotificationIds,
-      for (final notification in notifications) notification.id,
-    });
+    try {
+      await _taskApi.markAllNotificationsRead(accessToken: widget.accessToken);
+      if (mounted) {
+        setState(() {
+          _readNotificationIds = {
+            for (final notification in notifications) notification.id,
+          };
+        });
+      }
+    } on AuthApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 
   Future<void> _openNotification(_CheckOpsNotification notification) async {
     await _markRead(notification);
-    final entry = notification.entry;
-    if (entry != null) {
+    final entryId = notification.relatedEntryId;
+    if (entryId != null) {
+      if (notification.relatedEntryDeleted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('This task entry has been removed.')),
+          );
+        }
+        return;
+      }
       try {
-        await _taskApi.getTaskEntry(
-          entryId: entry.id,
+        final task = notification.task;
+        if (task == null) {
+          throw AuthApiException('This task is no longer available.');
+        }
+        final payload = await _taskApi.getTaskEntry(
+          entryId: entryId,
           accessToken: widget.accessToken,
         );
         if (mounted) {
-          widget.onEntrySelected(entry);
+          widget.onEntrySelected(_TaskEntry.fromJson(payload, task));
         }
       } on AuthApiException catch (error) {
         if (!mounted) {
@@ -269,7 +175,10 @@ class _NotificationViewState extends State<_NotificationView> {
       }
       return;
     }
-    widget.onTaskSelected(notification.task);
+    final task = notification.task;
+    if (task != null) {
+      widget.onTaskSelected(task);
+    }
   }
 
   @override
@@ -398,6 +307,7 @@ class _NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = notification.kind.style;
+    final statusColor = style.color;
 
     return InkWell(
       onTap: onTap,
@@ -407,7 +317,7 @@ class _NotificationTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isRead ? const Color(0xFF3A3A3A) : const Color(0xFF404040),
           borderRadius: BorderRadius.circular(10),
-          border: Border(left: BorderSide(color: style.color, width: 4)),
+          border: Border(left: BorderSide(color: statusColor, width: 4)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,10 +326,10 @@ class _NotificationTile extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: style.color.withValues(alpha: 0.18),
+                color: statusColor.withValues(alpha: 0.18),
                 shape: BoxShape.circle,
               ),
-              child: Icon(style.icon, color: style.color, size: 22),
+              child: Icon(style.icon, color: statusColor, size: 22),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -535,7 +445,10 @@ class _CheckOpsNotification {
     required this.message,
     required this.timestamp,
     required this.task,
-    this.entry,
+    required this.relatedTaskId,
+    required this.relatedEntryId,
+    required this.relatedEntryDeleted,
+    required this.isRead,
   });
 
   final String id;
@@ -543,8 +456,11 @@ class _CheckOpsNotification {
   final String title;
   final String message;
   final DateTime timestamp;
-  final _Task task;
-  final _TaskEntry? entry;
+  final _Task? task;
+  final int? relatedTaskId;
+  final int? relatedEntryId;
+  final bool relatedEntryDeleted;
+  final bool isRead;
 
   String get timeLabel {
     return '${_relativeDateLabel(timestamp)} - ${_formatDateTime(timestamp)}';
@@ -552,54 +468,70 @@ class _CheckOpsNotification {
 }
 
 enum _NotificationKind {
-  overdue,
+  pending,
   submitted,
-  ready,
-  dueSoon,
-  result,
-  inactiveTask,
+  approved,
+  failed,
+  rejected,
+  expired,
 }
 
 extension _NotificationKindDetails on _NotificationKind {
-  int get priority {
-    return switch (this) {
-      _NotificationKind.overdue => 0,
-      _NotificationKind.submitted => 1,
-      _NotificationKind.ready => 2,
-      _NotificationKind.dueSoon => 3,
-      _NotificationKind.result => 4,
-      _NotificationKind.inactiveTask => 5,
-    };
-  }
-
   ({Color color, IconData icon}) get style {
     return switch (this) {
-      _NotificationKind.overdue => (
-        color: const Color(0xFFFF6B6B),
-        icon: Icons.warning_rounded,
+      _NotificationKind.pending => (
+        color: const Color(0xFFFF8B2C),
+        icon: Icons.assignment_ind_rounded,
       ),
       _NotificationKind.submitted => (
-        color: const Color(0xFF7CFF8A),
+        color: const Color(0xFF00B316),
         icon: Icons.assignment_turned_in_rounded,
       ),
-      _NotificationKind.ready => (
-        color: const Color(0xFF8EDCFF),
-        icon: Icons.upload_file_rounded,
+      _NotificationKind.approved => (
+        color: const Color(0xFF00B316),
+        icon: Icons.check_circle_rounded,
       ),
-      _NotificationKind.dueSoon => (
-        color: const Color(0xFFFFD166),
-        icon: Icons.schedule_rounded,
+      _NotificationKind.failed => (
+        color: const Color(0xFFFF1E1E),
+        icon: Icons.error_rounded,
       ),
-      _NotificationKind.result => (
-        color: const Color(0xFFD9D9D9),
-        icon: Icons.fact_check_rounded,
+      _NotificationKind.rejected => (
+        color: const Color(0xFFFF1E1E),
+        icon: Icons.cancel_rounded,
       ),
-      _NotificationKind.inactiveTask => (
-        color: const Color(0xFFFFB36B),
-        icon: Icons.pause_circle_filled_rounded,
+      _NotificationKind.expired => (
+        color: const Color(0xFF8E8E8E),
+        icon: Icons.timer_off_rounded,
       ),
     };
   }
+}
+
+_NotificationKind _notificationKindFromType(String type) {
+  final normalized = type.toLowerCase();
+  if (normalized.contains('expired')) {
+    return _NotificationKind.expired;
+  }
+  if (normalized.contains('rejected')) {
+    return _NotificationKind.rejected;
+  }
+  if (normalized.contains('failed')) {
+    return _NotificationKind.failed;
+  }
+  if (normalized.contains('approved')) {
+    return _NotificationKind.approved;
+  }
+  if (normalized.contains('submitted')) {
+    return _NotificationKind.submitted;
+  }
+  return _NotificationKind.pending;
+}
+
+int? _nullableNotificationId(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  return int.tryParse(value?.toString() ?? '');
 }
 
 String _relativeDateLabel(DateTime value) {

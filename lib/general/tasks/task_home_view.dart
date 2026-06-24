@@ -572,7 +572,10 @@ class _TaskEntryListViewState extends State<_TaskEntryListView> {
                     if (entries.isEmpty)
                       const SizedBox(
                         height: 180,
-                        child: _EmptyTasksView(label: 'No task entries found'),
+                        child: _EmptyTasksView(
+                          label: 'No task entries found',
+                          scrollable: false,
+                        ),
                       )
                     else
                       Padding(
@@ -2358,27 +2361,34 @@ class _FilterActionButton extends StatelessWidget {
 }
 
 class _EmptyTasksView extends StatelessWidget {
-  const _EmptyTasksView({required this.label});
+  const _EmptyTasksView({required this.label, this.scrollable = true});
 
   final String label;
+  final bool scrollable;
 
   @override
   Widget build(BuildContext context) {
+    final message = Center(
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFFC7C7C7),
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+
+    if (!scrollable) {
+      return message;
+    }
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
         SizedBox(height: MediaQuery.sizeOf(context).height * 0.22),
-        Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Color(0xFFC7C7C7),
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
-            ),
-          ),
-        ),
+        message,
       ],
     );
   }

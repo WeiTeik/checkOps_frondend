@@ -180,7 +180,7 @@ class _HomePageState extends State<HomePage> {
         reminders.add(
           LocalTaskReminder(
             entryId: entry.id,
-            title: 'Task ready for proof',
+            title: 'Task ready for submission',
             body: entry.task.title,
             scheduledAt: entry.startAt,
             kind: LocalTaskReminderKind.ready,

@@ -369,9 +369,9 @@ class _ReviewSubmissionPageState extends State<ReviewSubmissionPage> {
                                         ? 'Saving...'
                                         : 'Accept',
                                     icon: Icons.check_rounded,
-                                    backgroundColor: const Color(0xFFD9D9D9),
-                                    foregroundColor: Colors.black,
-                                    borderColor: const Color(0xFFD9D9D9),
+                                    backgroundColor: const Color(0xFF7CFF8A),
+                                    foregroundColor: const Color(0xFF008F13),
+                                    borderColor: const Color(0xFF7CFF8A),
                                     onPressed: _isSubmittingReview
                                         ? null
                                         : () => _confirmSubmitReview(true),

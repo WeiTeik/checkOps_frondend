@@ -175,6 +175,43 @@ class TaskApi {
     return <String, dynamic>{};
   }
 
+  Future<List<Map<String, dynamic>>> getNotifications({
+    required String accessToken,
+  }) async {
+    final body = await _authApi.request(
+      method: 'GET',
+      path: '/notifications',
+      bearerToken: accessToken,
+    );
+    final notifications = body['notifications'];
+    if (notifications is List) {
+      return notifications
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+    return const [];
+  }
+
+  Future<void> markNotificationRead({
+    required int notificationId,
+    required String accessToken,
+  }) async {
+    await _authApi.request(
+      method: 'PATCH',
+      path: '/notifications/$notificationId/read',
+      bearerToken: accessToken,
+    );
+  }
+
+  Future<void> markAllNotificationsRead({required String accessToken}) async {
+    await _authApi.request(
+      method: 'PATCH',
+      path: '/notifications/read-all',
+      bearerToken: accessToken,
+    );
+  }
+
   Future<List<Map<String, dynamic>>> getTaskEntriesLite({
     required int taskId,
     required String accessToken,
