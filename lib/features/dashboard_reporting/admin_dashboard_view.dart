@@ -156,7 +156,7 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: _AdminChartCard(
                   axisLabel: 'Submissions',
-                  title: 'Operator Task Submission',
+                  title: 'Assignee Task Submission',
                   accentColor: const Color(0xFF67D8FF),
                   values: data.submissionValues,
                   labels: data.dayLabels,
