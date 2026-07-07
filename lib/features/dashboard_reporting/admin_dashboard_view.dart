@@ -168,7 +168,7 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: _AdminChartCard(
                   axisLabel: 'Reviews',
-                  title: 'Tasks Reviewed by QC',
+                  title: 'Tasks Reviewed',
                   accentColor: const Color(0xFF7CFF8A),
                   values: data.reviewValues,
                   labels: data.dayLabels,
