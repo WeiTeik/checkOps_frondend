@@ -1,9 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-import '../authentication/auth_api.dart';
-import '../authentication/task_api.dart';
-import '../authentication/user_api.dart';
+import '../user_authentication/auth_api.dart';
+import 'task_api.dart';
+import '../user_management/user_api.dart';
 
 class CreateTaskPage extends StatefulWidget {
   const CreateTaskPage({

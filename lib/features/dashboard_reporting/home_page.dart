@@ -6,24 +6,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../authentication/auth_api.dart';
-import '../authentication/task_api.dart';
-import '../authentication/user_api.dart';
+import '../user_authentication/auth_api.dart';
+import '../task_management/task_api.dart';
+import '../user_management/user_api.dart';
 import 'checkops_bottom_nav.dart';
-import 'create_task_page.dart';
-import 'review_submission_page.dart';
-import 'submit_proof_page.dart';
-import 'notifications/local_notification_service.dart';
-import 'notifications/push_notification_service.dart';
+import '../task_management/create_task_page.dart';
+import '../evidence_submission/review_submission_page.dart';
+import '../evidence_submission/submit_proof_page.dart';
+import '../notifications/local_notification_service.dart';
+import '../notifications/push_notification_service.dart';
 
-part '../admin/admin_dashboard_view.dart';
-part '../admin/admin_users_view.dart';
-part '../admin/users/admin_user_filter_dialog.dart';
-part '../admin/users/admin_user_form_dialogs.dart';
-part '../admin/users/admin_user_widgets.dart';
-part 'notifications/notification_view.dart';
-part 'profile/profile_view.dart';
-part 'tasks/task_home_view.dart';
+part 'admin_dashboard_view.dart';
+part '../user_management/admin_users_view.dart';
+part '../user_management/users/admin_user_filter_dialog.dart';
+part '../user_management/users/admin_user_form_dialogs.dart';
+part '../user_management/users/admin_user_widgets.dart';
+part '../notifications/notification_view.dart';
+part '../profile_management/profile_view.dart';
+part '../task_management/task_home_view.dart';
 part 'widgets/home_header.dart';
 
 enum UserRole { operator, qc, admin }
@@ -108,18 +108,12 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _syncLocalTaskReminders();
-    _notificationTapSubscription = PushNotificationService
+    _notificationTapSubscription = LocalNotificationService
         .instance
-        .notificationTaps
+        .pushNotificationTaps
         .listen(_openNotificationTarget);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final pending = PushNotificationService.instance
-          .takePendingNotificationTap();
-      if (pending != null) {
-        _openNotificationTarget(pending);
-      }
-    });
+    _syncLocalTaskReminders();
+    _syncPushNotifications();
   }
 
   @override
@@ -134,6 +128,28 @@ class _HomePageState extends State<HomePage> {
     if (oldWidget.userId != widget.userId ||
         oldWidget.accessToken != widget.accessToken) {
       _syncLocalTaskReminders();
+      _syncPushNotifications();
+    }
+  }
+
+  Future<void> _syncPushNotifications() async {
+    try {
+      final setting = await _storage.read(
+        key: LocalNotificationService.enabledStorageKey,
+      );
+      if (setting == 'false') {
+        await PushNotificationService.instance.unregisterForUser(
+          accessToken: widget.accessToken,
+        );
+        return;
+      }
+
+      await PushNotificationService.instance.registerForUser(
+        userId: widget.userId,
+        accessToken: widget.accessToken,
+      );
+    } on Object {
+      // Push notifications are best-effort and must not block the main UI.
     }
   }
 
@@ -540,7 +556,7 @@ class _HomePageState extends State<HomePage> {
                                 loginBuilder: widget.loginBuilder,
                                 onProfileChanged: _updateProfile,
                                 onNotificationSettingChanged:
-                                    _syncLocalTaskReminders,
+                                    _syncNotificationChannels,
                               ),
                             ]
                           : [
@@ -599,7 +615,7 @@ class _HomePageState extends State<HomePage> {
                                 loginBuilder: widget.loginBuilder,
                                 onProfileChanged: _updateProfile,
                                 onNotificationSettingChanged:
-                                    _syncLocalTaskReminders,
+                                    _syncNotificationChannels,
                               ),
                             ],
                     ),
@@ -643,6 +659,11 @@ class _HomePageState extends State<HomePage> {
       role: role,
       profilePic: profilePic,
     );
+  }
+
+  Future<void> _syncNotificationChannels() async {
+    await _syncLocalTaskReminders();
+    await _syncPushNotifications();
   }
 
   void _openTaskEntry(_TaskEntry entry) {

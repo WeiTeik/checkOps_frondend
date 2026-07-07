@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../app_config.dart';
+import '../../app_config.dart';
 
 typedef AccessTokenProvider = String? Function();
 typedef UnauthorizedTokenHandler =

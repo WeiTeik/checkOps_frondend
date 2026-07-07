@@ -1,4 +1,4 @@
-part of '../home_page.dart';
+part of '../dashboard_reporting/home_page.dart';
 
 class _ProfileView extends StatefulWidget {
   const _ProfileView({
@@ -103,6 +103,7 @@ class _ProfileViewState extends State<_ProfileView> {
         value: value.toString(),
       );
       await PushNotificationService.instance.setEnabled(
+        userId: widget.userId,
         accessToken: widget.accessToken,
         enabled: value,
       );

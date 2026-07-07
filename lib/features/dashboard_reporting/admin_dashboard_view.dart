@@ -1,4 +1,4 @@
-part of '../general/home_page.dart';
+part of 'home_page.dart';
 
 class _AdminDashboardView extends StatefulWidget {
   const _AdminDashboardView({

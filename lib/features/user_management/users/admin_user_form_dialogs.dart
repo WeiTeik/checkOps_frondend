@@ -1,4 +1,4 @@
-part of '../../general/home_page.dart';
+part of '../../dashboard_reporting/home_page.dart';
 
 class _AddAdminUserDialog extends StatefulWidget {
   const _AddAdminUserDialog({required this.accessToken});

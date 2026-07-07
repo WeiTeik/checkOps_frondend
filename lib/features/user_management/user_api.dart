@@ -1,4 +1,4 @@
-import 'auth_api.dart';
+import '../user_authentication/auth_api.dart';
 
 class _NoUserPayloadValue {
   const _NoUserPayloadValue();

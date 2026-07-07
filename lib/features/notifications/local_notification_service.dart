@@ -33,7 +33,7 @@ class LocalNotificationService {
 
   static const enabledStorageKey = 'profile_notifications_enabled';
   static const _channelId = 'checkops_task_reminders';
-  static const pushChannelId = 'checkops_push_notifications';
+  static const _pushChannelId = 'checkops_push_notifications';
   static const _payloadPrefix = 'checkops-reminder';
   static const _maximumScheduledReminders = 60;
 
@@ -76,7 +76,7 @@ class LocalNotificationService {
             >()
             ?.createNotificationChannel(
               const AndroidNotificationChannel(
-                pushChannelId,
+                _pushChannelId,
                 'CheckOps notifications',
                 description: 'Task and workflow updates from CheckOps',
                 importance: Importance.high,
@@ -199,7 +199,7 @@ class LocalNotificationService {
       body: body,
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
-          pushChannelId,
+          _pushChannelId,
           'CheckOps notifications',
           channelDescription: 'Task and workflow updates from CheckOps',
           importance: Importance.high,

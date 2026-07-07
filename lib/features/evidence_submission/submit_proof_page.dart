@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
-import '../authentication/auth_api.dart';
-import '../authentication/task_api.dart';
+import '../user_authentication/auth_api.dart';
+import '../task_management/task_api.dart';
 
 class SubmitProofPage extends StatefulWidget {
   const SubmitProofPage({

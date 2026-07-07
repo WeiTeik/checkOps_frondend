@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
 import 'app_config.dart';
-import 'authentication/auth_api.dart';
-import 'authentication/auth_flow.dart';
-import 'authentication/auth_session.dart';
-import 'authentication/deep_link_service.dart';
-import 'authentication/expired_auth_link_page.dart';
-import 'authentication/login_page.dart';
-import 'authentication/otp_email_verification.dart';
-import 'general/home_page.dart';
-import 'general/notifications/local_notification_service.dart';
-import 'general/notifications/push_notification_service.dart';
+import 'features/dashboard_reporting/home_page.dart';
+import 'features/notifications/local_notification_service.dart';
+import 'features/notifications/push_notification_service.dart';
+import 'features/user_authentication/auth_api.dart';
+import 'features/user_authentication/auth_flow.dart';
+import 'features/user_authentication/auth_session.dart';
+import 'features/user_authentication/deep_link_service.dart';
+import 'features/user_authentication/expired_auth_link_page.dart';
+import 'features/user_authentication/login_page.dart';
+import 'features/user_authentication/otp_email_verification.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

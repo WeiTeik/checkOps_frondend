@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:checkops_frondend/authentication/auth_flow.dart';
-import 'package:checkops_frondend/authentication/login_page.dart';
-import 'package:checkops_frondend/authentication/otp_email_verification.dart';
-import 'package:checkops_frondend/authentication/reset_password.dart';
+import 'package:checkops_frondend/features/user_authentication/auth_flow.dart';
+import 'package:checkops_frondend/features/user_authentication/login_page.dart';
+import 'package:checkops_frondend/features/user_authentication/otp_email_verification.dart';
+import 'package:checkops_frondend/features/user_authentication/reset_password.dart';
 
 void main() {
   Future<void> pumpLoginPage(WidgetTester tester) async {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../general/home_page.dart';
+import '../dashboard_reporting/home_page.dart';
 import 'auth_api.dart';
 import 'auth_session.dart';
 import 'forget_password.dart';
